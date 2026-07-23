@@ -1,0 +1,59 @@
+2026-07-08 12:38:12,974 - INFO - ============================================================
+2026-07-08 12:38:12,974 - INFO - DEBUT DU CYCLE D'ENTRAINEMENT HEBDOMADAIRE
+2026-07-08 12:38:12,974 - INFO - ============================================================
+2026-07-08 12:38:12,974 - INFO - Connexion a Neon PostgreSQL...
+2026-07-08 12:38:18,521 - INFO - 0 dossiers historiques charges.
+2026-07-08 12:38:18,521 - WARNING - Seulement 0 dossiers disponibles - entrainement annule (minimum requis : 100).
+2026-07-08 13:04:35,359 - INFO - ============================================================
+2026-07-08 13:04:35,359 - INFO - DEBUT DU CYCLE D'ENTRAINEMENT HEBDOMADAIRE
+2026-07-08 13:04:35,359 - INFO - ============================================================
+2026-07-08 13:04:35,359 - INFO - Connexion a Neon PostgreSQL...
+2026-07-08 13:04:44,006 - INFO - 4750 dossiers historiques charges.
+2026-07-08 13:04:52,680 - INFO - Nouveau modele sauvegarde le 2026-07-08 13:04:52
+2026-07-08 13:04:52,683 - INFO - Metriques : {'accuracy': 0.9136842105263158, 'precision': 0.7555555555555555, 'recall': 0.6754966887417219, 'specificity': np.float64(0.9586983729662077), 'f1': 0.7132867132867133, 'roc_auc': 0.9524073966630473, 'n_train': 3800, 'n_test': 950}
+2026-07-08 13:04:52,683 - INFO - Cycle d'entrainement termine avec succes.
+2026-07-09 01:59:54,006 - INFO - ============================================================
+2026-07-09 01:59:54,012 - INFO - DEBUT DU CYCLE D'ENTRAINEMENT HEBDOMADAIRE
+2026-07-09 01:59:54,012 - INFO - ============================================================
+2026-07-09 01:59:54,012 - INFO - Connexion a Neon PostgreSQL...
+2026-07-09 02:00:00,762 - INFO - 4750 dossiers historiques charges.
+2026-07-09 02:00:12,682 - INFO - Cycle d'entrainement termine avec succes.
+2026-07-21 01:06:34,918 - INFO - Chargement du modele ML en memoire...
+2026-07-21 01:06:36,828 - INFO - Facteurs cl�s charg�s : ['experience_totale', 'ratio_fonds', 'eca_obtained_Yes', 'provincial_nomination_Yes', 'clb_english_min']
+2026-07-21 01:06:36,841 - INFO - Donnees d'importance des features chargees.
+2026-07-21 01:06:36,841 - INFO - Modele charge avec succes. API prete.
+2026-07-21 01:12:21,670 - INFO - ============================================================
+2026-07-21 01:12:21,671 - INFO - DEBUT DU CYCLE D'ENTRAINEMENT (MANUEL)
+2026-07-21 01:12:21,672 - INFO - ============================================================
+2026-07-21 01:12:21,673 - INFO - Connexion a Neon PostgreSQL...
+2026-07-21 01:12:27,365 - INFO - 4750 dossiers historiques charges.
+2026-07-21 01:12:27,669 - INFO - Entrainement de LogisticRegression...
+2026-07-21 01:12:44,364 - INFO -   LogisticRegression - Precision: 0.5081, F1: 0.5595
+2026-07-21 01:12:44,364 - INFO - Entrainement de RandomForest...
+2026-07-21 01:15:04,026 - INFO -   RandomForest - Precision: 0.9375, F1: 0.1796
+2026-07-21 01:15:04,026 - INFO - Entrainement de GradientBoosting...
+2026-07-21 01:21:19,890 - INFO -   GradientBoosting - Precision: 0.7426, F1: 0.7038
+2026-07-21 01:21:19,890 - INFO - Entrainement de XGBoost...
+2026-07-21 01:22:37,953 - INFO -   XGBoost - Precision: 0.7319, F1: 0.6990
+2026-07-21 01:22:37,953 - INFO - Entrainement de SVC...
+2026-07-21 01:24:34,562 - INFO -   SVC - Precision: 0.5822, F1: 0.5724
+2026-07-21 01:24:34,562 - INFO - Entrainement de KNN...
+2026-07-21 01:24:38,344 - INFO -   KNN - Precision: 0.2973, F1: 0.4223
+2026-07-21 01:24:38,359 - INFO - MODELE FINAL RETENU : GradientBoosting
+2026-07-21 01:24:38,359 - INFO -   Precision: 0.7426
+2026-07-21 01:24:38,359 - INFO -   Recall: 0.6689
+2026-07-21 01:24:38,359 - INFO -   F1: 0.7038
+2026-07-21 01:24:38,359 - INFO -   ROC-AUC: 0.9487
+2026-07-21 01:24:38,359 - INFO -   Meilleurs parametres: {'classifier__subsample': 0.9, 'classifier__n_estimators': 300, 'classifier__min_samples_leaf': 10, 'classifier__max_depth': 3, 'classifier__learning_rate': 0.05}
+2026-07-21 01:24:38,359 - INFO -   Nombre dossiers train: 3800
+2026-07-21 01:24:38,364 - INFO - Comparaison des modeles sauvegardee dans comparaison_modeles.csv
+2026-07-21 01:24:38,364 - INFO - Meilleurs hyperparametres sauvegardes dans meilleurs_hyperparametres.json
+2026-07-21 01:24:38,385 - INFO - Top 10 features sauvegardees : ['experience_totale', 'ratio_fonds', 'eca_obtained_Yes', 'provincial_nomination_Yes', 'clb_english_min', 'nclc_french_min', 'years_foreign_experience', 'years_canadian_experience', 'clb_speaking_english', 'education_level_Master degree']
+2026-07-21 01:24:43,566 - INFO - \u2705 Nouveau mod�le sauvegard� : Precision 0.743 (vs ancien 0.743)
+2026-07-21 01:24:44,420 - INFO - Cycle d'entrainement termine avec succes.
+2026-07-21 02:37:47,299 - INFO - Fermeture de l'application, liberation des ressources...
+2026-07-21 02:38:24,880 - INFO - Chargement du modele ML en memoire...
+2026-07-21 02:38:26,696 - INFO - Facteurs cl�s charg�s : ['experience_totale', 'ratio_fonds', 'eca_obtained_Yes', 'provincial_nomination_Yes', 'clb_english_min']
+2026-07-21 02:38:26,715 - INFO - Donnees d'importance des features chargees.
+2026-07-21 02:38:26,715 - INFO - Modele charge avec succes. API prete.
+2026-07-21 02:47:03,513 - INFO - Fermeture de l'application, liberation des ressources...

@@ -1,0 +1,36 @@
+name: Entraînement mensuel du modèle
+
+on:
+  schedule:
+    - cron: '0 0 1 * *'          # 1er jour de chaque mois à minuit UTC
+  workflow_dispatch:              # Déclenchement manuel
+
+jobs:
+  train:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@v4
+
+      - name: Installer Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Installer les dépendances d'entraînement
+        run: pip install -r backend/requirements-train.txt
+
+      - name: Exécuter l'entraînement
+        env:
+          NEON_DATABASE_URL: ${{ secrets.NEON_DATABASE_URL }}
+          SEUIL_MIN_QUALITE_PRECISION: '0.65'
+        run: python backend/train.py
+
+      - name: Commiter les nouveaux modèles si valides
+        run: |
+          git config user.name "GitHub Actions Bot"
+          git config user.email "bot@hiciofficiel.local"
+          git add backend/modele_canada.pkl backend/seuil_decision.pkl backend/top_features.json
+          git diff --staged --quiet || git commit -m "Modèle re-entraîné automatiquement - $(date +%Y-%m-%d)"
+          git push
