@@ -132,7 +132,6 @@ def main(page: ft.Page):
             gradient=ft.LinearGradient(begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
                                     colors=[ROUGE_CANADA, "#7A0015"]),
             alignment=ft.Alignment(0, 0),
-            min_width=300,
         )
 
         panneau_droit = ft.Container(
@@ -158,7 +157,6 @@ def main(page: ft.Page):
             expand=True,
             alignment=ft.Alignment(0, 0),
             bgcolor=BLANC,
-            min_width=300,
         )
 
         return ft.View(
