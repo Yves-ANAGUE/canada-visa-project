@@ -48,6 +48,11 @@ def main(page: ft.Page):
 
     client_api = ClientAPI()
     historique_nav = {"pile": [], "position": -1}
+    page.sidebar_visible = True
+
+    def toggle_sidebar(e):
+        page.sidebar_visible = not page.sidebar_visible
+        page.update()
 
     def aller_vers(route: str, empiler: bool = True):
         if empiler:
@@ -94,7 +99,7 @@ def main(page: ft.Page):
                 notification(page, f"Connexion reussie - bienvenue {client_api.nom_agent or ''}.")
                 historique_nav["pile"] = ["/dashboard"]
                 historique_nav["position"] = 0
-                page.go("/dashboard")  # ou aller_vers("/dashboard") si vous voulez
+                page.go("/dashboard")
             except ErreurAPI as err:
                 texte_erreur.value = err.message
             except Exception:
@@ -103,7 +108,6 @@ def main(page: ft.Page):
                 indicateur.visible = False
                 page.update()
 
-        
         panneau_gauche = ft.Container(
             content=ft.Column(
                 [
@@ -124,9 +128,11 @@ def main(page: ft.Page):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            width=460, gradient=ft.LinearGradient(begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
-                                                    colors=[ROUGE_CANADA, "#7A0015"]),
-            alignment=ft.Alignment(0, 0), expand=True,
+            expand=True,
+            gradient=ft.LinearGradient(begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
+                                    colors=[ROUGE_CANADA, "#7A0015"]),
+            alignment=ft.Alignment(0, 0),
+            min_width=300,
         )
 
         panneau_droit = ft.Container(
@@ -141,7 +147,7 @@ def main(page: ft.Page):
                     ft.Container(height=8), texte_erreur, ft.Container(height=12),
                     ft.ElevatedButton(
                         content=ft.Row([indicateur, ft.Text("Se connecter", weight=ft.FontWeight.BOLD)],
-                                        alignment=ft.MainAxisAlignment.CENTER, spacing=10),
+                                    alignment=ft.MainAxisAlignment.CENTER, spacing=10),
                         width=360, height=48, bgcolor=ROUGE_CANADA, color=BLANC, on_click=se_connecter,
                         style=ft.ButtonStyle(shape=ft.RoundedRectangleBorder(radius=12)),
                     ),
@@ -149,10 +155,27 @@ def main(page: ft.Page):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            expand=True, alignment=ft.Alignment(0, 0), bgcolor=BLANC,
+            expand=True,
+            alignment=ft.Alignment(0, 0),
+            bgcolor=BLANC,
+            min_width=300,
         )
 
-        return ft.View("/", controls=[ft.Row([panneau_gauche, panneau_droit], expand=True)], padding=0)
+        return ft.View(
+            "/",
+            controls=[
+                ft.ResponsiveRow(
+                    [
+                        ft.Column(col={"sm": 12, "md": 6}, controls=[panneau_gauche]),
+                        ft.Column(col={"sm": 12, "md": 6}, controls=[panneau_droit]),
+                    ],
+                    expand=True,
+                    spacing=0,
+                )
+            ],
+            padding=0,
+            scroll=ft.ScrollMode.AUTO,
+        )
 
     
     # LAYOUT COMMUN (sidebar + contenu) pour les pages authentifiees
@@ -166,15 +189,52 @@ def main(page: ft.Page):
     def mise_en_page(route_active: str, titre: str, construire_contenu) -> ft.View:
         corps = ft.Column([superposition_chargement()], expand=True)
         conteneur_page = ft.Column(
-            [barre_navigation_haut(historique_nav, retour_navigation, avancer_navigation, titre),
-            ft.Container(height=16), corps],
-            scroll=ft.ScrollMode.AUTO, expand=True,
+            [
+                ft.Row([
+                    ft.IconButton(
+                        icon=ft.icons.MENU if page.sidebar_visible else ft.icons.MENU_OPEN,
+                        on_click=toggle_sidebar,
+                        tooltip="Afficher/masquer le menu"
+                    ),
+                    ft.Text(titre, size=22, weight=ft.FontWeight.BOLD, color=GRIS_TEXTE),
+                ], spacing=10),
+                ft.Container(height=16),
+                corps
+            ],
+            scroll=ft.ScrollMode.AUTO,
+            expand=True,
         )
-        vue = ft.View(route_active, controls=[ft.Row([
-            barre_laterale(page, client_api, route_active, aller_vers),
-            ft.Container(content=conteneur_page, expand=True, padding=28, bgcolor=GRIS_CLAIR),
-        ], expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH, spacing=0)],
-            padding=0, spacing=0, scroll=None)
+        
+        sidebar = barre_laterale(page, client_api, route_active, aller_vers)
+        sidebar_container = ft.Container(
+            content=sidebar,
+            width=250 if page.sidebar_visible else 0,
+            animate=ft.animation.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+            clip_behavior=ft.ClipBehavior.HARD_EDGE,
+        )
+        
+        vue = ft.View(
+            route_active,
+            controls=[
+                ft.Row(
+                    [
+                        sidebar_container,
+                        ft.Container(
+                            content=conteneur_page,
+                            expand=True,
+                            padding=28,
+                            bgcolor=GRIS_CLAIR,
+                        ),
+                    ],
+                    expand=True,
+                    vertical_alignment=ft.CrossAxisAlignment.STRETCH,
+                    spacing=0,
+                )
+            ],
+            padding=0,
+            spacing=0,
+            scroll=None,
+        )
 
         def charger():
             try:

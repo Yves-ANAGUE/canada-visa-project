@@ -560,10 +560,17 @@ def _construire_rapport(id_client: str):
 
     try:
         top_df = etat_application.get('feature_importance')
-        diagnostic_texte = generer_diagnostic_openrouter(profil, resultat, top_df)
+        diagnostic_texte = generer_diagnostic_openrouter(
+            profil,
+            resultat,
+            top_df,
+            scenarios=scenarios,
+            est_archive=est_archive,
+            decision_reelle=dossier.get('visa_decision') if est_archive else None
+        )
     except Exception as e:
-        logger.error(f"Erreur OpenRouter : {e}")
-        diagnostic_texte = "Diagnostic IA temporairement indisponible."
+        logger.error(f"Erreur diagnostic IA {id_client} : {e}", exc_info=True)
+        diagnostic_texte = "Diagnostic IA temporairement indisponible (probleme de connexion au service)."
 
     return dossier, resultat, diagnostic_texte, scenarios, None
 
@@ -596,21 +603,24 @@ def endpoint_envoyer_email(id_client: str, agent: dict = Depends(verifier_identi
         raise HTTPException(status_code=400, detail="Aucune adresse e-mail enregistree pour ce dossier")
     metriques = endpoint_metriques_modele(agent)
     pdf_bytes = generer_pdf_diagnostic(dossier, resultat, diagnostic, scenarios, metriques)
-    envoyer_email_pdf(
-        destinataire=dossier['email'],
-        sujet="Votre rapport d'evaluation - HI Consulting Immigration",
-        corps=(
-            f"Bonjour {dossier.get('nom','')} {dossier.get('prenom','')},\n\n"
-            f"Suite a l'analyse de votre dossier d'immigration (programme {dossier.get('program','-')}), "
-            f"veuillez trouver ci-joint votre rapport d'evaluation detaille, incluant le diagnostic "
-            f"de notre systeme et nos recommandations personnalisees.\n\n"
-            f"Pour toute question, notre equipe reste a votre disposition.\n\n"
-            f"Cordialement,\nL'equipe HI Consulting Immigration\n"
-            f"Logpom Carrefour Bassong, Douala - +237 678 924 045"
-        ),
-        pdf_bytes=pdf_bytes,
-        nom_fichier=f"rapport_{id_client}.pdf"
-    )
+    try:
+        envoyer_email_pdf(
+            destinataire=dossier['email'],
+            sujet="Votre rapport d'evaluation - HI Consulting Immigration",
+            corps=(
+                f"Bonjour {dossier.get('nom','')} {dossier.get('prenom','')},\n\n"
+                f"Suite a l'analyse de votre dossier d'immigration (programme {dossier.get('program','-')}), "
+                f"veuillez trouver ci-joint votre rapport d'evaluation detaille, incluant le diagnostic "
+                f"de notre systeme et nos recommandations personnalisees.\n\n"
+                f"Pour toute question, notre equipe reste a votre disposition.\n\n"
+                f"Cordialement,\nL'equipe HI Consulting Immigration\n"
+                f"Logpom Carrefour Bassong, Douala - +237 678 924 045"
+            ),
+            pdf_bytes=pdf_bytes,
+            nom_fichier=f"rapport_{id_client}.pdf"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi de l'email : {str(e)}")
     return {"statut": "Email envoye avec succes", "destinataire": dossier['email']}
 
 

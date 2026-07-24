@@ -474,13 +474,28 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
     Génère un rapport PDF complet avec les métriques du modèle.
     Tous les textes sont nettoyés pour la police Helvetica.
     """
+        # Recherche du logo
+    logo_path = None
+    possible_paths = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'frontend', 'assets', 'logo_HICI.jpg'),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), 'frontend', 'assets', 'logo_HICI.jpg'),
+        'frontend/assets/logo_HICI.jpg',
+        'assets/logo_HICI.jpg',
+    ]
+    for p in possible_paths:
+        if os.path.exists(p):
+            logo_path = p
+            break
+    if logo_path is None:
+        logo_path = chemin_logo  # fallback
+
     pdf = FPDF()
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
 
     # ---- En-tête ----
     try:
-        pdf.image(chemin_logo, x=15, y=12, w=28)
+        pdf.image(logo_path, x=15, y=12, w=28)
     except Exception:
         pass
 
@@ -609,12 +624,14 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
 # CORRECTION dans utils.py - envoyer_email_pdf()
 
 def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: bytes, nom_fichier: str):
-    expediteur = os.environ['GMAIL_ADDRESS']
-    mot_de_passe_app = os.environ['GMAIL_APP_PASSWORD']
-
+    expediteur = os.environ.get('GMAIL_ADDRESS')
+    mot_de_passe_app = os.environ.get('GMAIL_APP_PASSWORD')
+    if not expediteur or not mot_de_passe_app:
+        raise ValueError("Les variables d'environnement GMAIL_ADDRESS et GMAIL_APP_PASSWORD doivent être définies.")
+    
     message = EmailMessage()
     message['Subject'] = sujet
-    message['From'] = f"HI Consulting Immigration <{expediteur}>"   # <-- nom affiche par Gmail
+    message['From'] = f"HI Consulting Immigration <{expediteur}>"
     message['To'] = destinataire
     message.set_content(corps)
     message.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=nom_fichier)
@@ -635,16 +652,31 @@ def profil_complet_pour_prediction(profil_dict: dict) -> bool:
 # utils.py - Ajouter à la fin
 
 def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
-                                   top_facteurs_globaux: pd.DataFrame = None) -> str:
+                                   top_facteurs_globaux: pd.DataFrame = None,
+                                   scenarios: list = None,
+                                   est_archive: bool = False,
+                                   decision_reelle: str = None) -> str:
+    """
+    Génère un diagnostic via OpenRouter en utilisant un prompt structuré.
+    Si l'API échoue, retourne un message d'erreur.
+    """
     import os
     import requests
+    import numpy as np
+
     OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
+    if not OPENROUTER_API_KEY:
+        return "Diagnostic IA non disponible : clé API manquante."
+
     OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
     MODEL = "openrouter/free"
 
-    top5 = top_facteurs_globaux.head(5)['Variable_origine'].tolist() if top_facteurs_globaux is not None else ['experience_totale', 'ratio_fonds', 'eca_obtained', 'provincial_nomination', 'clb_english_min']
+    if top_facteurs_globaux is not None and not top_facteurs_globaux.empty:
+        top5 = top_facteurs_globaux.head(5)['Variable_origine'].tolist()
+    else:
+        top5 = ['experience_totale', 'ratio_fonds', 'eca_obtained', 'provincial_nomination', 'clb_english_min']
 
-    # ---- Construction des informations supplémentaires (comme avant) ----
+    # Détection des champs manquants
     champs_manquants = []
     for champ in COLONNES_BRUTES_ATTENDUES:
         valeur = profil_brut.get(champ)
@@ -653,54 +685,113 @@ def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
 
     note_estimation = ""
     if champs_manquants:
-        note_estimation = f"""
-⚠️ ATTENTION : Ce dossier est incomplet ({len(champs_manquants)} champs manquants).
-Champs manquants : {', '.join(champs_manquants[:10])}{'...' if len(champs_manquants) > 10 else ''}
-La prédiction est basée sur des valeurs estimées par le modèle.
-Complétez ces champs pour une évaluation plus fiable.
-"""
-    elif resultat_prediction.get('estime', False):
-        note_estimation = """
-ℹ️ Note : Certaines valeurs ont été estimées par le modèle car le dossier n'est pas complètement rempli.
-"""
+        note_estimation = (
+            f"⚠️ ATTENTION : Ce dossier est incomplet ({len(champs_manquants)} champs manquants).\n"
+            f"Champs manquants : {', '.join(champs_manquants[:10])}{'...' if len(champs_manquants) > 10 else ''}\n"
+            "La prédiction est basée sur des valeurs estimées par le modèle.\n"
+            "Complétez ces champs pour une évaluation plus fiable."
+        )
 
-    note_simulateur = """
-📊 Note sur le simulateur : Les gains indiqués sont des estimations individuelles,
-une modification à la fois, en partant du profil actuel. L'effet combiné de
-plusieurs modifications peut être différent (interactions non-linéaires).
-"""
+    clb_vals = [profil_brut.get(c) for c in ['clb_speaking_english','clb_listening_english','clb_reading_english','clb_writing_english'] if profil_brut.get(c) is not None]
+    clb_info = f"CLB anglais : min {min(clb_vals) if clb_vals else 'non renseigné'}"
+    nclc_vals = [profil_brut.get(c) for c in ['nclc_speaking_french','nclc_listening_french','nclc_reading_french','nclc_writing_french'] if profil_brut.get(c) is not None]
+    nclc_info = f"NCLC français : min {min(nclc_vals) if nclc_vals else 'non renseigné'}"
 
-    # ---- Construction du prompt ----
-    prompt = f"""Tu es un analyste expert en immigration canadienne (Entree Express).
-Voici un dossier client evalue par un modele de Machine Learning (GradientBoosting).
+    if est_archive and decision_reelle:
+        prompt = f"""Tu es un analyste expert en immigration canadienne.
+
+📁 ANALYSE RÉTROSPECTIVE D'UN DOSSIER CLOS
+
+Ce dossier est ARCHIVÉ avec une décision réelle : {decision_reelle}.
+Le modèle ML avait prédit : {resultat_prediction['decision_predite']} ({resultat_prediction['probabilite_acceptation']*100:.1f}%) - décision {"alignée" if decision_reelle == resultat_prediction['decision_predite'] else "différente"} avec la réalité.
+
+📊 DONNÉES DU DOSSIER :
+- Programme : {profil_brut.get('program') or 'inconnu'}
+- Pays : {profil_brut.get('country_of_origin') or 'inconnu'}
+- Niveau d'études : {profil_brut.get('education_level') or 'inconnu'}
+- ECA : {profil_brut.get('eca_obtained') or 'inconnu'}
+- {clb_info}
+- {nclc_info}
+- Expérience étrangère : {profil_brut.get('years_foreign_experience') or 0} ans
+- Expérience canadienne : {profil_brut.get('years_canadian_experience') or 0} ans
+- Fonds : {profil_brut.get('funds_available_cad') or 'non renseigné'} CAD
+- PNP : {profil_brut.get('provincial_nomination') or 'inconnu'}
+- Offre d'emploi : {profil_brut.get('job_offer_canada') or 'inconnu'}
+
+📈 FACTEURS CLÉS DU MODÈLE : {', '.join(top5)}
+
+🔍 QUESTIONS À ANALYSER :
+1. Quels étaient les FACTEURS CLÉS qui ont conduit à la décision réelle ?
+   (Identifie les points forts et faibles du dossier)
+
+2. Le modèle était-il aligné avec la réalité ? Si non, pourquoi ?
+   (Évalue les écarts éventuels)
+
+3. Quelles auraient été les MEILLEURES ACTIONS à entreprendre ?
+   (Propose 2-3 actions concrètes basées sur les leviers du simulateur)
+
+4. Quelle leçon tirer pour de futurs dossiers similaires ?
+
+📝 Rédige une analyse rétrospective détaillée de 100-150 mots en français, professionnelle et pédagogique.
+Structure ta réponse : d'abord un résumé du dossier et de la décision, puis l'analyse des facteurs clés, les actions recommandées, et enfin la leçon à retenir.
+"""
+    else:
+        recommandations_simulateur = ""
+        if scenarios:
+            scenarios_positifs = [s for s in scenarios if s.get('gain_absolu', 0) > 0.01]
+            if scenarios_positifs:
+                top_rec = sorted(scenarios_positifs, key=lambda x: x['gain_absolu'], reverse=True)[:3]
+                recommandations_simulateur = "🔍 RECOMMANDATIONS PRIORITAIRES (basées sur le simulateur) :\n"
+                for i, s in enumerate(top_rec, 1):
+                    recommandations_simulateur += f"{i}. {s['levier']} : +{s['gain_absolu']*100:.1f} pts\n"
+            else:
+                recommandations_simulateur = "✅ Tous les leviers semblent déjà optimisés. Consolidez votre dossier."
+
+        prompt = f"""Tu es un analyste expert en immigration canadienne.
+
+📋 DIAGNOSTIC D'UN DOSSIER EN COURS
 
 {note_estimation}
 
-{note_simulateur}
+📊 INFORMATIONS COMPLÈTES DU DOSSIER :
 
-PROFIL DU CANDIDAT :
-- Age : {profil_brut.get('age', 'inconnu')} ans, {profil_brut.get('marital_status', 'inconnu')}
-- Pays d'origine : {profil_brut.get('country_of_origin', 'inconnu')}
-- Niveau d'etudes : {profil_brut.get('education_level', 'inconnu')} (ECA : {profil_brut.get('eca_obtained', 'inconnu')})
-- Programme vise : {profil_brut.get('program', 'inconnu')}
-- CLB anglais (min) : {min(profil_brut.get('clb_speaking_english', 0), profil_brut.get('clb_listening_english', 0), profil_brut.get('clb_reading_english', 0), profil_brut.get('clb_writing_english', 0))}
-- Experience etrangere : {profil_brut.get('years_foreign_experience', 0)} ans
-- Experience canadienne : {profil_brut.get('years_canadian_experience', 0)} ans
-- Fonds disponibles : {profil_brut.get('funds_available_cad', 'non renseigne')} CAD
-- PNP : {profil_brut.get('provincial_nomination', 'inconnu')}
-- Offre d'emploi : {profil_brut.get('job_offer_canada', 'inconnu')}
+- Age : {profil_brut.get('age', 'inconnu')}
+- Statut matrimonial : {profil_brut.get('marital_status') or 'inconnu'}
+- Pays d'origine : {profil_brut.get('country_of_origin') or 'inconnu'}
+- Niveau d'études : {profil_brut.get('education_level') or 'inconnu'}
+- ECA : {profil_brut.get('eca_obtained') or 'inconnu'}
+- Programme cible : {profil_brut.get('program') or 'inconnu'}
+- {clb_info}
+- {nclc_info}
+- Expérience étrangère : {profil_brut.get('years_foreign_experience') or 0} ans
+- Expérience canadienne : {profil_brut.get('years_canadian_experience') or 0} ans
+- Secteur : {profil_brut.get('sector') or 'inconnu'}
+- TEER : {profil_brut.get('teer_category') or 'inconnu'}
+- Fonds disponibles : {profil_brut.get('funds_available_cad') or 'non renseigné'} CAD
+- Offre d'emploi : {profil_brut.get('job_offer_canada') or 'inconnu'}
+- PNP : {profil_brut.get('provincial_nomination') or 'inconnu'}
+- Famille au Canada : {profil_brut.get('family_in_canada') or 'inconnu'}
 
-RESULTAT DU MODELE :
-- Decision predite : {resultat_prediction['decision_predite']}
-- Probabilite : {resultat_prediction['probabilite_acceptation']*100:.1f}%
-- Confiance : {resultat_prediction['niveau_confiance']}
+📈 RÉSULTAT DU MODÈLE :
+- Décision prédite : {resultat_prediction['decision_predite']}
+- Probabilité : {resultat_prediction['probabilite_acceptation']*100:.1f}%
+- Niveau de confiance : {resultat_prediction['niveau_confiance']}
+- Facteurs clés du modèle : {', '.join(top5)}
 
-VARIABLES LES PLUS INFLUENTES : {', '.join(top5)}
+{recommandations_simulateur}
 
-Redige un diagnostic court (100-150 mots) en francais, professionnel et bienveillant,
-qui explique les facteurs cles et donne 1-2 recommandations concretes.
-Ne repete pas les chiffres bruts, interprete-les.
-Si le dossier est incomplet, mentionne-le et conseille de completer les champs manquants.
+📝 Rédige un diagnostic de 100-150 mots en français, professionnel et bienveillant.
+Structure ta réponse :
+1. RÉSUMÉ : Présente le profil et la décision prédite.
+2. POINTS FORTS : Identifie 2-3 atouts du dossier.
+3. POINTS FAIBLES : Identifie 2-3 axes d'amélioration (en lien avec les champs manquants si présents).
+4. RECOMMANDATIONS : Propose 2-3 actions concrètes **basées sur les résultats du simulateur**. Si le simulateur n'est pas disponible, donne des conseils génériques.
+
+⚠️ IMPORTANT :
+- Tes recommandations doivent être cohérentes avec les gains du simulateur.
+- Si le dossier est incomplet, insiste sur la nécessité de compléter les champs manquants.
+- Sois positif et constructif.
+- N'invente pas de chiffres. Utilise les données fournies.
 """
 
     headers = {
@@ -712,13 +803,14 @@ Si le dossier est incomplet, mentionne-le et conseille de completer les champs m
     data = {
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.4,
-        "max_tokens": 400
+        "temperature": 0.3,
+        "max_tokens": 600
     }
 
     try:
         response = requests.post(OPENROUTER_URL, headers=headers, json=data, timeout=30)
         response.raise_for_status()
-        return response.json()['choices'][0]['message']['content']
+        result = response.json()
+        return result['choices'][0]['message']['content']
     except Exception as e:
-        raise Exception(f"Erreur OpenRouter : {e}")
+        return f"Diagnostic IA temporairement indisponible (erreur : {str(e)})"
