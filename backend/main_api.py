@@ -1,6 +1,6 @@
 # main_api.py
 from fastapi import BackgroundTasks
-import backend.train as module_train
+
 import os
 import sys
 import json
@@ -651,11 +651,12 @@ def endpoint_reentrainer(background_tasks: BackgroundTasks, admin: dict = Depend
             raise HTTPException(status_code=502, detail=f"Erreur déclenchement : {response.text}")
         return {"statut": "Reentrainement déclenché via GitHub Actions."}
     else:
-        # Import local pour éviter l'erreur au démarrage
+        # Import local pour éviter le chargement au démarrage
         try:
             import backend.train as module_train
-        except ImportError as e:
-            raise HTTPException(status_code=503, detail=f"Module train introuvable : {e}")
+        except ImportError:
+            # Fallback pour le développement local (si backend n'est pas un package)
+            import train as module_train
         background_tasks.add_task(module_train.main, declenchement='manuel')
         return {"statut": "Reentrainement local lancé (BackgroundTasks)."}
 
