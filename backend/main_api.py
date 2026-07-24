@@ -1,6 +1,6 @@
 # main_api.py
 from fastapi import BackgroundTasks
-
+import backend.train as module_train
 import os
 import sys
 import json
@@ -22,7 +22,7 @@ from sqlalchemy import create_engine, text
 from fastapi import Request
 import requests as requests_lib
 
-from utils import (
+from backend.utils import (
     predire_client, hacher_mot_de_passe, verifier_mot_de_passe,
     generer_id_client_atomique, calculer_age, COLONNES_BRUTES_ATTENDUES,
     simuler_optimisation, generer_pdf_diagnostic, envoyer_email_pdf, nettoyer_decimals,
@@ -653,7 +653,7 @@ def endpoint_reentrainer(background_tasks: BackgroundTasks, admin: dict = Depend
     else:
         # Import local pour éviter l'erreur au démarrage
         try:
-            import train as module_train
+            import backend.train as module_train
         except ImportError as e:
             raise HTTPException(status_code=503, detail=f"Module train introuvable : {e}")
         background_tasks.add_task(module_train.main, declenchement='manuel')
