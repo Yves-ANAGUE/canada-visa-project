@@ -2272,5 +2272,5 @@ if __name__ == "__main__":
         target=main_avec_diagnostic,
         assets_dir="assets",
         port=port,
-        view=ft.WEB_BROWSER
+        view=ft.AppView.WEB_BROWSER
     )
