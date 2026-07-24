@@ -17,6 +17,36 @@ from email.message import EmailMessage
 
 from decimal import Decimal
 
+def nettoyer_pour_pdf(texte: str) -> str:
+    """
+    Remplace les caractères non supportés par la police Helvetica de FPDF
+    par leurs équivalents ASCII.
+    """
+    if not isinstance(texte, str):
+        return str(texte) if texte is not None else ""
+    
+    substitutions = {
+        '’': "'",   # apostrophe courbe
+        '“': '"',   # guillemet courbe gauche
+        '”': '"',   # guillemet courbe droit
+        '–': '-',   # tiret moyen
+        '—': '-',   # tiret long
+        '…': '...', # points de suspension
+        '«': '"',   # guillemet français gauche
+        '»': '"',   # guillemet français droit
+        '•': '*',   # puce
+        '·': '.',   # point médian
+        ' ': ' ',   # espace fine
+    }
+    for old, new in substitutions.items():
+        texte = texte.replace(old, new)
+    
+    # Supprimer les caractères non ASCII (optionnel mais prudent)
+    # Garde les lettres accentuées courantes (é, è, etc.) car Helvetica les supporte
+    # On ne supprime que les caractères vraiment exotiques (ex: symboles mathématiques)
+    texte = ''.join(c for c in texte if ord(c) < 128 or c in 'éèêëàâôçîïùûü')
+    return texte
+
 def nettoyer_decimals(d: dict) -> dict:
     """Convertit tous les decimal.Decimal (issus de PostgreSQL NUMERIC)
     en float natif Python, pour eviter les erreurs de calcul."""
@@ -442,20 +472,25 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
                             chemin_logo: str = '../frontend/assets/logo_HICI.jpg') -> bytes:
     """
     Génère un rapport PDF complet avec les métriques du modèle.
+    Tous les textes sont nettoyés pour la police Helvetica.
     """
     pdf = FPDF()
     pdf.add_page()
     pdf.set_margins(15, 15, 15)
 
-    # ---- En-tete ----
+    # ---- En-tête ----
     try:
         pdf.image(chemin_logo, x=15, y=12, w=28)
     except Exception:
         pass
 
     try:
-        pdf.image(_telecharger_image("https://flagcdn.com/w80/ca.png"), x=170, y=12, w=13)
-        pdf.image(_telecharger_image("https://flagcdn.com/w80/cm.png"), x=185, y=12, w=13)
+        # Télécharger les drapeaux (si nécessaire)
+        import requests
+        flag_ca = requests.get("https://flagcdn.com/w80/ca.png", timeout=3)
+        flag_cm = requests.get("https://flagcdn.com/w80/cm.png", timeout=3)
+        pdf.image(BytesIO(flag_ca.content), x=170, y=12, w=13)
+        pdf.image(BytesIO(flag_cm.content), x=185, y=12, w=13)
     except Exception:
         pass
 
@@ -472,12 +507,19 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
     pdf.line(15, pdf.get_y(), 195, pdf.get_y())
     pdf.ln(8)
 
+    # ---- Nettoyage des données ----
+    nom = nettoyer_pour_pdf(dossier.get('nom') or 'Non renseigné')
+    prenom = nettoyer_pour_pdf(dossier.get('prenom') or '')
+    programme = nettoyer_pour_pdf(dossier.get('program') or '-')
+    pays = nettoyer_pour_pdf(dossier.get('country_of_origin') or '-')
+    diagnostic_clean = nettoyer_pour_pdf(diagnostic_texte or "Diagnostic non disponible.")
+
     # ---- Informations du dossier ----
     pdf.set_font('Helvetica', 'B', 12)
-    pdf.cell(0, 8, f"Dossier : {dossier.get('nom') or 'Non renseigne'} {dossier.get('prenom') or ''}", ln=True)
+    pdf.cell(0, 8, f"Dossier : {nom} {prenom}", ln=True)
     pdf.set_font('Helvetica', '', 10)
-    pdf.cell(0, 6, f"Programme vise : {dossier.get('program') or '-'}", ln=True)
-    pdf.cell(0, 6, f"Pays d'origine : {dossier.get('country_of_origin') or '-'}", ln=True)
+    pdf.cell(0, 6, f"Programme vise : {programme}", ln=True)
+    pdf.cell(0, 6, f"Pays d'origine : {pays}", ln=True)
 
     # ---- Résultat de l'analyse predictive ----
     pdf.ln(6)
@@ -488,23 +530,27 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
     pdf.cell(0, 7, "Resultat de l'analyse predictive", ln=True)
     pdf.set_x(20)
     pdf.set_font('Helvetica', '', 10)
-    pdf.cell(0, 6, f"Decision predite : {resultat_prediction.get('decision_predite', '-')}", ln=True)
+    decision = nettoyer_pour_pdf(resultat_prediction.get('decision_predite', '-'))
+    pdf.cell(0, 6, f"Decision predite : {decision}", ln=True)
     pdf.set_x(20)
     proba = resultat_prediction.get('probabilite_acceptation', 0) or 0
+    confiance = nettoyer_pour_pdf(resultat_prediction.get('niveau_confiance', '-'))
     pdf.cell(0, 6, f"Probabilite d'acceptation : {proba*100:.1f}%   |   "
-                    f"Confiance : {resultat_prediction.get('niveau_confiance', '-')}", ln=True)
+                    f"Confiance : {confiance}", ln=True)
     pdf.set_x(20)
 
     # ---- Métriques ----
     if metriques and metriques.get('accuracy') is not None:
         date_exec = str(metriques.get('date_execution', ''))[:10]
+        acc = float(metriques['accuracy'])*100
+        prec = float(metriques['precision_score'])*100
+        rec = float(metriques['recall_score'])*100
+        spec = float(metriques.get('specificity_score') or 0)*100
+        f1 = float(metriques['f1_score'])*100
+        roc = float(metriques['roc_auc'])
         pdf.cell(0, 6, f"Metriques du modele (entrainement du {date_exec}) : "
-                        f"Accuracy {float(metriques['accuracy'])*100:.1f}% - "
-                        f"Precision {float(metriques['precision_score'])*100:.1f}% - "
-                        f"Recall {float(metriques['recall_score'])*100:.1f}% - "
-                        f"Specificity {float(metriques.get('specificity_score') or 0)*100:.1f}% - "
-                        f"F1 {float(metriques['f1_score'])*100:.1f}% - "
-                        f"ROC-AUC {float(metriques['roc_auc']):.4f}", ln=True)
+                        f"Accuracy {acc:.1f}% - Precision {prec:.1f}% - Recall {rec:.1f}% - "
+                        f"Specificity {spec:.1f}% - F1 {f1:.1f}% - ROC-AUC {roc:.4f}", ln=True)
     else:
         pdf.cell(0, 6, "Metriques du modele : Precision 75.6% - Recall 67.5% - Specificity 95.9% - "
                         "F1-Score 71.3% - ROC-AUC 0.9524", ln=True)
@@ -515,7 +561,7 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
     pdf.cell(0, 8, 'Diagnostic et recommandations (Data Analyst IA)', ln=True)
     pdf.ln(1)
     pdf.set_font('Helvetica', '', 10)
-    pdf.multi_cell(0, 6, diagnostic_texte or "Diagnostic non disponible.")
+    pdf.multi_cell(0, 6, diagnostic_clean)
 
     # ---- Simulateur d'optimisation ----
     if scenarios:
@@ -523,12 +569,8 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
         pdf.set_font('Helvetica', 'B', 12)
         pdf.cell(0, 8, "Simulateur d'optimisation prescriptive", ln=True)
         pdf.ln(1)
-        
-        
-        # SOLUTION : Utiliser un tableau simple au lieu de multi_cell
-        
+
         pdf.set_font('Helvetica', '', 8)
-        
         # En-tête du tableau
         pdf.set_fill_color(240, 240, 240)
         pdf.set_font('Helvetica', 'B', 8)
@@ -536,11 +578,11 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
         pdf.cell(40, 6, "Nouvelle proba", border=1, ln=0, align='C', fill=True)
         pdf.cell(30, 6, "Gain", border=1, ln=0, align='C', fill=True)
         pdf.cell(30, 6, "Decision", border=1, ln=1, align='C', fill=True)
-        
+
         pdf.set_font('Helvetica', '', 8)
         for s in scenarios[:6]:
             gain = s['gain_absolu'] * 100
-            levier = s['levier']
+            levier = nettoyer_pour_pdf(s['levier'])
             # Troncature agressive
             if len(levier) > 25:
                 levier = levier[:22] + "..."
@@ -548,7 +590,8 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
             pdf.cell(90, 5, levier, border=1, ln=0, align='L')
             pdf.cell(40, 5, f"{s['probabilite_apres']*100:.1f}%", border=1, ln=0, align='C')
             pdf.cell(30, 5, f"{'+' if gain>=0 else ''}{gain:.1f} pts", border=1, ln=0, align='C')
-            pdf.cell(30, 5, s['nouvelle_decision'], border=1, ln=1, align='C')
+            decision_scenario = nettoyer_pour_pdf(s['nouvelle_decision'])
+            pdf.cell(30, 5, decision_scenario, border=1, ln=1, align='C')
 
     # ---- Pied de page ----
     pdf.set_y(-22)
