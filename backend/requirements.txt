@@ -10,3 +10,4 @@ psycopg2-binary
 pydantic
 requests
 fpdf2
+imbalanced-learn
