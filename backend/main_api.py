@@ -293,7 +293,7 @@ def endpoint_diagnostic(profil: ProfilCandidat, agent: dict = Depends(verifier_i
 # creation de dossier (accepte maintenant un profil PARTIEL - saisie progressive)
 
 
-from utils import generer_id_client_atomique   # ajouter cet import
+from backend.utils import generer_id_client_atomique   # ajouter cet import
 
 
 # REMPLACE creer_dossier dans main_api.py

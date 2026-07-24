@@ -28,7 +28,7 @@ from sklearn.metrics import (
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 
-from utils import (
+from backend.utils import (
     FUNDS_BY_YEAR, EXTRA_FUNDS_PER_DEPENDANT, FRANCOPHONE_COUNTRIES,
     COLONNES_BRUTES_ATTENDUES
 )

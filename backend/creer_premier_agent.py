@@ -4,7 +4,7 @@
 import os
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-from utils import hacher_mot_de_passe
+from backend.utils import hacher_mot_de_passe
 
 load_dotenv()
 engine = create_engine(os.environ['NEON_DATABASE_URL'])
