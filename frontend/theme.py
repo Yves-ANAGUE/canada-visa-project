@@ -15,7 +15,7 @@ VERT_SUCCES = "#1E8E5A"
 ORANGE_ALERTE = "#E08A00"
 
 DEGRADE_HEADER = ft.LinearGradient(
-    begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
+    begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
     colors=[ROUGE_CANADA, ROUGE_FONCE, "#7A0015"],
 )
 DEGRADE_ACCENT = ft.LinearGradient(

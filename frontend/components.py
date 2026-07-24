@@ -26,7 +26,7 @@ def entete_logo(page: ft.Page) -> ft.Container:
             spacing=4, horizontal_alignment=ft.CrossAxisAlignment.START, tight=True,
         ),
         padding=ft.padding.symmetric(horizontal=16, vertical=18),
-        gradient=ft.LinearGradient(begin=ft.alignment.top_left, end=ft.alignment.bottom_right,
+        gradient=ft.LinearGradient(begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
                                      colors=[ROUGE_CANADA, "#8A0018"]),
         width=250, height=170,
     )
