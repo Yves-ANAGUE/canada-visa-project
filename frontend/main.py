@@ -126,7 +126,7 @@ def main(page: ft.Page):
             ),
             width=460, gradient=ft.LinearGradient(begin=ft.Alignment(-1, -1), end=ft.Alignment(1, 1),
                                                     colors=[ROUGE_CANADA, "#7A0015"]),
-            alignment=ft.alignment.center, expand=True,
+            alignment=ft.Alignment(0, 0), expand=True,
         )
 
         panneau_droit = ft.Container(
@@ -149,7 +149,7 @@ def main(page: ft.Page):
                 horizontal_alignment=ft.CrossAxisAlignment.CENTER,
                 alignment=ft.MainAxisAlignment.CENTER,
             ),
-            expand=True, alignment=ft.alignment.center, bgcolor=BLANC,
+            expand=True, alignment=ft.Alignment(0, 0), bgcolor=BLANC,
         )
 
         return ft.View("/", controls=[ft.Row([panneau_gauche, panneau_droit], expand=True)], padding=0)
@@ -254,8 +254,8 @@ def main(page: ft.Page):
                         curved=True,
                         stroke_cap_round=True,
                         below_line_gradient=ft.LinearGradient(
-                            begin=ft.alignment.top_center,
-                            end=ft.alignment.bottom_center,
+                            begin=ft.Alignment(0, -1),
+                            end=ft.Alignment(0, 1),
                             colors=["#33D80621", "#00D80621"],
                         ),
                     )
@@ -315,7 +315,7 @@ def main(page: ft.Page):
                                 animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
                             ),
                             padding=ft.padding.only(right=max(0, 100 - (valeur / maxi * 100))),
-                            alignment=ft.alignment.center_left,
+                            alignment=ft.Alignment(-1, 0),
                         ),
                     ], spacing=3)
                 )
@@ -1523,7 +1523,7 @@ def main(page: ft.Page):
                                                                 height=140,
                                                                 border_radius=70,
                                                                 gradient=ft.RadialGradient(
-                                                                    center=ft.alignment.center,
+                                                                    center=ft.Alignment(0, 0),
                                                                     radius=0.8,
                                                                     colors=["#4F46E5", "#7C3AED", "#DB2777"]
                                                                 ),
@@ -1535,7 +1535,7 @@ def main(page: ft.Page):
                                                                 scale=1.0,
                                                             ),
                                                         ],
-                                                        alignment=ft.alignment.center,
+                                                        alignment=ft.Alignment(0, 0),
                                                     ),
                                                     ft.Container(height=30),
                                                     ft.Text(
@@ -1563,11 +1563,11 @@ def main(page: ft.Page):
                                         alignment=ft.MainAxisAlignment.CENTER,
                                     ),
                                     expand=True,
-                                    alignment=ft.alignment.center,
+                                    alignment=ft.Alignment(0, 0),
                                 ),
                             ]
                         ),
-                        alignment=ft.alignment.center,
+                        alignment=ft.Alignment(0, 0),
                         expand=True,
                         opacity=0,
                         animate_opacity=500,
@@ -1609,7 +1609,7 @@ def main(page: ft.Page):
                             
                             # Tourbillon devient vert
                             orbe.gradient = ft.RadialGradient(
-                                center=ft.alignment.center,
+                                center=ft.Alignment(0, 0),
                                 radius=0.8,
                                 colors=["#10B981", "#34D399", "#6EE7B7"]
                             )
@@ -1677,7 +1677,7 @@ def main(page: ft.Page):
                             # Changement des couleurs de l'orbe
                             couleurs = couleurs_tourbillon[i % len(couleurs_tourbillon)]
                             orbe.gradient = ft.RadialGradient(
-                                center=ft.alignment.center,
+                                center=ft.Alignment(0, 0),
                                 radius=0.8,
                                 colors=couleurs
                             )

@@ -19,7 +19,7 @@ DEGRADE_HEADER = ft.LinearGradient(
     colors=[ROUGE_CANADA, ROUGE_FONCE, "#7A0015"],
 )
 DEGRADE_ACCENT = ft.LinearGradient(
-    begin=ft.alignment.center_left, end=ft.alignment.center_right,
+    begin=ft.Alignment(-1, 0), end=ft.Alignment(1, 0),
     colors=[OR_ERABLE, "#E0BE55"],
 )
 

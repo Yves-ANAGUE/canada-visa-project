@@ -76,7 +76,7 @@ def superposition_chargement(message: str = "Chargement en cours...") -> ft.Cont
              ft.Container(height=14), ft.Text(message, size=14, color=GRIS_TEXTE, weight=ft.FontWeight.W_600)],
             horizontal_alignment=ft.CrossAxisAlignment.CENTER, alignment=ft.MainAxisAlignment.CENTER,
         ),
-        alignment=ft.alignment.center, expand=True, bgcolor="#F4F5F7",
+        alignment=ft.Alignment(0, 0), expand=True, bgcolor="#F4F5F7",
         animate_opacity=250,
     )
 
@@ -280,7 +280,7 @@ def lancer_orbe_ia(conteneur: ft.Column, page: ft.Page, callback_final, duree_se
                                         height=220,
                                         border_radius=150,
                                         gradient=ft.RadialGradient(
-                                            center=ft.alignment.center,
+                                            center=ft.Alignment(0, 0),
                                             radius=0.8,
                                             colors=["#4F46E5", "#7C3AED", "#DB2777"]
                                         ),
@@ -329,11 +329,11 @@ def lancer_orbe_ia(conteneur: ft.Column, page: ft.Page, callback_final, duree_se
                         alignment=ft.MainAxisAlignment.CENTER,
                     ),
                     expand=True,
-                    alignment=ft.alignment.center,
+                    alignment=ft.Alignment(0, 0),
                 ),
             ]
         ),
-        alignment=ft.alignment.center,
+        alignment=ft.Alignment(0, 0),
         expand=True,
         opacity=0,
         animate_opacity=500,
@@ -372,7 +372,7 @@ def lancer_orbe_ia(conteneur: ft.Column, page: ft.Page, callback_final, duree_se
         
         for i in range(etapes):
             orbe.gradient = ft.RadialGradient(
-                center=ft.alignment.center,
+                center=ft.Alignment(0, 0),
                 radius=0.8,
                 colors=couleurs_cycle[i % len(couleurs_cycle)]
             )
@@ -410,7 +410,7 @@ def lancer_orbe_ia(conteneur: ft.Column, page: ft.Page, callback_final, duree_se
             
             # Orbe verte
             orbe.gradient = ft.RadialGradient(
-                center=ft.alignment.center,
+                center=ft.Alignment(0, 0),
                 radius=0.8,
                 colors=["#10B981", "#34D399", "#6EE7B7"]
             )
