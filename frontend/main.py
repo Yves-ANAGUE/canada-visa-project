@@ -159,45 +159,69 @@ def main(page: ft.Page):
             bgcolor=BLANC,
         )
 
+        # Utiliser Row simple avec expand=True pour remplir toute la hauteur
         return ft.View(
             "/",
             controls=[
-                ft.ResponsiveRow(
+                ft.Row(
                     [
-                        ft.Column(col={"sm": 12, "md": 6}, controls=[panneau_gauche]),
-                        ft.Column(col={"sm": 12, "md": 6}, controls=[panneau_droit]),
+                        ft.Container(panneau_gauche, expand=True),
+                        ft.Container(panneau_droit, expand=True),
                     ],
                     expand=True,
+                    vertical_alignment=ft.CrossAxisAlignment.STRETCH,
                     spacing=0,
                 )
             ],
             padding=0,
-            scroll=ft.ScrollMode.AUTO,
         )
 
     
     # LAYOUT COMMUN (sidebar + contenu) pour les pages authentifiees
     
     
-    
+    def toggle_sidebar(e):
+        page.sidebar_visible = not page.sidebar_visible
+        page.update()    
     
 # CORRECTION dans main.py - mise_en_page() passe desormais
 # aller_vers, retour_navigation, avancer_navigation
 
     def mise_en_page(route_active: str, titre: str, construire_contenu) -> ft.View:
         corps = ft.Column([superposition_chargement()], expand=True)
+        
+        # Barre de titre avec flèches + bouton menu + titre
+        barre_titre = ft.Row(
+            [
+                ft.IconButton(
+                    icon=ft.icons.MENU if page.sidebar_visible else ft.icons.MENU_OPEN,
+                    on_click=toggle_sidebar,
+                    tooltip="Afficher/masquer le menu",
+                ),
+                ft.IconButton(
+                    icon=ft.icons.ARROW_BACK_IOS_NEW,
+                    icon_size=16,
+                    on_click=retour_navigation,
+                    disabled=(historique_nav["position"] <= 0),
+                    tooltip="Page precedente",
+                ),
+                ft.IconButton(
+                    icon=ft.icons.ARROW_FORWARD_IOS,
+                    icon_size=16,
+                    on_click=avancer_navigation,
+                    disabled=(historique_nav["position"] >= len(historique_nav["pile"]) - 1),
+                    tooltip="Page suivante",
+                ),
+                ft.Text(titre, size=22, weight=ft.FontWeight.BOLD, color=GRIS_TEXTE, expand=True),
+            ],
+            spacing=6,
+        )
+        
         conteneur_page = ft.Column(
             [
-                ft.Row([
-                    ft.IconButton(
-                        icon=ft.icons.MENU if page.sidebar_visible else ft.icons.MENU_OPEN,
-                        on_click=toggle_sidebar,
-                        tooltip="Afficher/masquer le menu"
-                    ),
-                    ft.Text(titre, size=22, weight=ft.FontWeight.BOLD, color=GRIS_TEXTE),
-                ], spacing=10),
+                barre_titre,
                 ft.Container(height=16),
-                corps
+                corps,
             ],
             scroll=ft.ScrollMode.AUTO,
             expand=True,
@@ -206,8 +230,8 @@ def main(page: ft.Page):
         sidebar = barre_laterale(page, client_api, route_active, aller_vers)
         sidebar_container = ft.Container(
             content=sidebar,
-            width=250 if page.sidebar_visible else 0,
-            animate=ft.animation.Animation(300, ft.AnimationCurve.EASE_IN_OUT),
+            width=250,
+            visible=page.sidebar_visible,  # utilise visible, pas width animée
             clip_behavior=ft.ClipBehavior.HARD_EDGE,
         )
         

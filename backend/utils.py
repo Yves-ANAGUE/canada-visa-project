@@ -804,7 +804,7 @@ Structure ta réponse :
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
-        "max_tokens": 600
+        "max_tokens": 800  # ← augmenté
     }
 
     try:
@@ -812,5 +812,9 @@ Structure ta réponse :
         response.raise_for_status()
         result = response.json()
         return result['choices'][0]['message']['content']
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 429:
+            return "Le service de diagnostic IA a atteint sa limite de requêtes (trop de demandes). Réessayez dans quelques minutes."
+        return f"Erreur API OpenRouter : {str(e)}"
     except Exception as e:
         return f"Diagnostic IA temporairement indisponible (erreur : {str(e)})"

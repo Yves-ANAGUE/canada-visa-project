@@ -102,7 +102,7 @@ class ClientAPI:
         return f"{API_BASE_URL}/dossiers/{id_client}/pdf"
 
     def envoyer_email(self, id_client: str) -> dict:
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=60) as client:  # ← 60s
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/envoyer-email", auth=self._auth())
             return self._traiter_reponse(r)
 
