@@ -563,9 +563,10 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
         spec = float(metriques.get('specificity_score') or 0)*100
         f1 = float(metriques['f1_score'])*100
         roc = float(metriques['roc_auc'])
-        pdf.cell(0, 6, f"Metriques du modele (entrainement du {date_exec}) : "
-                        f"Accuracy {acc:.1f}% - Precision {prec:.1f}% - Recall {rec:.1f}% - "
-                        f"Specificity {spec:.1f}% - F1 {f1:.1f}% - ROC-AUC {roc:.4f}", ln=True)
+        pdf.cell(0, 6, f"Metriques du modele (entrainement du {date_exec}) : ", ln=True)
+        pdf.set_x(20)
+        pdf.cell(0, 6, f"Accuracy {acc:.1f}% - Precision {prec:.1f}% - Recall {rec:.1f}% - "
+                        f"Specificity {spec:.1f}% - F1 {f1:.1f}% - ROC-AUC {roc:.4f}", ln=True)        
     else:
         pdf.cell(0, 6, "Metriques du modele : Precision 75.6% - Recall 67.5% - Specificity 95.9% - "
                         "F1-Score 71.3% - ROC-AUC 0.9524", ln=True)
@@ -609,11 +610,11 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
             pdf.cell(30, 5, decision_scenario, border=1, ln=1, align='C')
 
     # ---- Pied de page ----
-    pdf.set_y(-22)
+    pdf.set_y(-42)
     pdf.set_draw_color(216, 6, 33)
     pdf.line(15, pdf.get_y() - 3, 195, pdf.get_y() - 3)
     pdf.set_font('Helvetica', 'I', 8)
-    pdf.cell(0, 5, 'HI Consulting Immigration - Logpom Carrefour Bassong, Douala - +237 678 924 045', align='C')
+    pdf.cell(0, 5, 'HI Consulting Immigration - Logpom Carrefour Bassong, Douala - hiciofficiel@gmail.com - +237 678 924 045', align='C')
 
     return bytes(pdf.output())
 

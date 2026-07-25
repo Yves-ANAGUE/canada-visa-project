@@ -1042,8 +1042,8 @@ def main(page: ft.Page):
                 try:
                     reponse = client_api.regenerer_diagnostic(id_client)
                     notification(page, "Diagnostic régénéré avec succès.")
-                    # Recharger la page pour afficher le nouveau diagnostic
-                    page.go(f"/dossier/{id_client}")
+                    # Forcer le rechargement avec un timestamp
+                    page.go(f"/dossier/{id_client}?t={int(time.time())}")
                 except ErreurAPI as err:
                     notification(page, f"Erreur : {err.message}", succes=False)            
 

@@ -719,7 +719,7 @@ def _envoyer_email_complet(id_client: str, email_destinataire: str):
                 f"de notre systeme et nos recommandations personnalisees.\n\n"
                 f"Pour toute question, notre equipe reste a votre disposition.\n\n"
                 f"Cordialement,\nL'equipe HI Consulting Immigration\n"
-                f"Logpom Carrefour Bassong, Douala - +237 678 924 045"
+                f"Logpom Carrefour Bassong, Douala - hiciofficiel@gmail.com - +237 678 924 045"
             ),
             pdf_bytes=pdf_bytes,
             nom_fichier=f"rapport_{id_client}.pdf"
