@@ -596,32 +596,58 @@ def endpoint_telecharger_pdf(id_client: str, agent: dict = Depends(verifier_iden
         headers={'Content-Disposition': f'attachment; filename=rapport_{id_client}.pdf'}
     )
 
+
 @app.post("/dossiers/{id_client}/envoyer-email")
 def endpoint_envoyer_email(id_client: str, background_tasks: BackgroundTasks, agent: dict = Depends(verifier_identifiants)):
-    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client)
-    if not dossier.get('email'):
+    # On vérifie juste que le dossier existe et a un email
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        # On cherche dans les deux tables
+        ligne = conn.execute(text(
+            "SELECT email FROM predictions_canada WHERE id_client = :id"
+        ), {"id": id_client}).fetchone()
+        if ligne is None:
+            ligne = conn.execute(text(
+                "SELECT email FROM apprentissage_canada WHERE id_client = :id"
+            ), {"id": id_client}).fetchone()
+            if ligne is None:
+                raise HTTPException(status_code=404, detail="Dossier introuvable")
+    
+    email_destinataire = ligne[0] if ligne else None
+    if not email_destinataire:
         raise HTTPException(status_code=400, detail="Aucune adresse e-mail enregistree pour ce dossier")
     
-    metriques = endpoint_metriques_modele(agent)
-    
-    # Tâche asynchrone
+    # On lance la tâche en arrière-plan avec tout le reste
     background_tasks.add_task(
-        _envoyer_email_async,
-        dossier=dossier,
-        resultat=resultat,
-        diagnostic=diagnostic,
-        scenarios=scenarios,
-        metriques=metriques,
-        id_client=id_client
+        _envoyer_email_complet,
+        id_client=id_client,
+        email_destinataire=email_destinataire
     )
     
-    return {"statut": "Email en cours d'envoi (traitement asynchrone)", "destinataire": dossier['email']}
+    return {"statut": "Envoi de l'email en cours (traitement asynchrone)", "destinataire": email_destinataire}
 
-def _envoyer_email_async(dossier: dict, resultat: dict, diagnostic: str, scenarios: list, metriques: dict, id_client: str):
+
+def _envoyer_email_complet(id_client: str, email_destinataire: str):
+    """
+    Tâche asynchrone : récupère le dossier, génère le PDF, l'envoie par email.
+    """
+    import logging
+    logger = logging.getLogger('main_api')
+    
     try:
+        # 1. Construire le rapport (tout le lourd)
+        dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client)
+        
+        # 2. Récupérer les métriques
+        metriques = endpoint_metriques_modele(agent={"identifiant_conseiller": "system"})
+        
+        # 3. Générer le PDF
         pdf_bytes = generer_pdf_diagnostic(dossier, resultat, diagnostic, scenarios, metriques)
+        logger.info(f"PDF généré pour {id_client}, taille : {len(pdf_bytes)} octets")
+        
+        # 4. Envoyer l'email
         envoyer_email_pdf(
-            destinataire=dossier['email'],
+            destinataire=email_destinataire,
             sujet="Votre rapport d'evaluation - HI Consulting Immigration",
             corps=(
                 f"Bonjour {dossier.get('nom','')} {dossier.get('prenom','')},\n\n"
@@ -635,7 +661,9 @@ def _envoyer_email_async(dossier: dict, resultat: dict, diagnostic: str, scenari
             pdf_bytes=pdf_bytes,
             nom_fichier=f"rapport_{id_client}.pdf"
         )
-        logger.info(f"Email envoyé avec succès à {dossier['email']} pour le dossier {id_client}")
+        
+        logger.info(f"Email envoyé avec succès à {email_destinataire} pour le dossier {id_client}")
+    
     except Exception as e:
         logger.error(f"Erreur lors de l'envoi de l'email pour {id_client} : {e}", exc_info=True)
 

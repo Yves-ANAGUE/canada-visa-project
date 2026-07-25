@@ -5,6 +5,9 @@ on:
     - cron: '0 0 1 * *'          # 1er jour de chaque mois à minuit UTC
   workflow_dispatch:              # Déclenchement manuel
 
+permissions:
+  contents: write                 # ← AJOUT ESSENTIEL
+
 jobs:
   train:
     runs-on: ubuntu-latest

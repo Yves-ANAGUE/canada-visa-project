@@ -624,11 +624,19 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
 # CORRECTION dans utils.py - envoyer_email_pdf()
 
 def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: bytes, nom_fichier: str):
+    import logging
+    logger = logging.getLogger('main_api')
+    
     expediteur = os.environ.get('GMAIL_ADDRESS')
     mot_de_passe_app = os.environ.get('GMAIL_APP_PASSWORD')
-    if not expediteur or not mot_de_passe_app:
-        raise ValueError("Les variables d'environnement GMAIL_ADDRESS et GMAIL_APP_PASSWORD doivent être définies.")
     
+    if not expediteur:
+        raise ValueError("La variable d'environnement GMAIL_ADDRESS n'est pas définie.")
+    if not mot_de_passe_app:
+        raise ValueError("La variable d'environnement GMAIL_APP_PASSWORD n'est pas définie.")
+    
+    logger.info(f"Préparation de l'email pour {destinataire} depuis {expediteur}")
+
     message = EmailMessage()
     message['Subject'] = sujet
     message['From'] = f"HI Consulting Immigration <{expediteur}>"
@@ -639,6 +647,7 @@ def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: byte
     with smtplib.SMTP_SSL('smtp.gmail.com', 465) as serveur:
         serveur.login(expediteur, mot_de_passe_app)
         serveur.send_message(message)
+        logger.info(f"Message envoyé via SMTP à {destinataire}")
 
 
 
