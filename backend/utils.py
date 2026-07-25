@@ -623,36 +623,55 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
 
 # CORRECTION dans utils.py - envoyer_email_pdf()
 
+import requests
+import os
+import logging
+from email.message import EmailMessage
+import base64
+
 def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: bytes, nom_fichier: str):
-    import logging
     logger = logging.getLogger('main_api')
     
-    expediteur = os.environ.get('GMAIL_ADDRESS')
-    mot_de_passe_app = os.environ.get('GMAIL_APP_PASSWORD')
+    api_key = os.environ.get('BREVO_API_KEY')
+    expediteur = os.environ.get('BREVO_SENDER_EMAIL')
     
+    if not api_key:
+        raise ValueError("BREVO_API_KEY non définie dans l'environnement")
     if not expediteur:
-        raise ValueError("La variable d'environnement GMAIL_ADDRESS n'est pas définie.")
-    if not mot_de_passe_app:
-        raise ValueError("La variable d'environnement GMAIL_APP_PASSWORD n'est pas définie.")
-    
-    logger.info(f"Préparation de l'email pour {destinataire} depuis {expediteur}")
+        raise ValueError("BREVO_SENDER_EMAIL non définie dans l'environnement")
 
-    message = EmailMessage()
-    message['Subject'] = sujet
-    message['From'] = f"HI Consulting Immigration <{expediteur}>"
-    message['To'] = destinataire
-    message.set_content(corps)
-    message.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=nom_fichier)
+    # Encoder le PDF en base64
+    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
 
-    # Utiliser le port 587 avec STARTTLS (au lieu de 465 en SSL)
+    # Construction du payload Brevo
+    data = {
+        "sender": {"email": expediteur, "name": "HI Consulting Immigration"},
+        "to": [{"email": destinataire}],
+        "subject": sujet,
+        "textContent": corps,
+        "attachment": [{
+            "content": pdf_base64,
+            "name": nom_fichier
+        }]
+    }
+
+    headers = {
+        "api-key": api_key,
+        "Content-Type": "application/json"
+    }
+
     try:
-        with smtplib.SMTP('smtp.gmail.com', 587) as serveur:
-            serveur.starttls()                 # Activation du chiffrement
-            serveur.login(expediteur, mot_de_passe_app)
-            serveur.send_message(message)
-            logger.info(f"Email envoyé avec succès à {destinataire}")
+        response = requests.post(
+            "https://api.brevo.com/v3/smtp/email",
+            json=data,
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        logger.info(f"Email envoyé avec succès à {destinataire} via Brevo")
+        return response.json()
     except Exception as e:
-        logger.error(f"Erreur lors de l'envoi SMTP : {e}")
+        logger.error(f"Erreur lors de l'envoi via Brevo : {e}")
         raise
 
 
