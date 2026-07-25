@@ -184,6 +184,16 @@ class ClientAPI:
             return self._traiter_reponse(r)
 
     
+    def regenerer_diagnostic(self, id_client: str) -> dict:
+        with httpx.Client(timeout=60) as client:
+            r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/regenerer-diagnostic", auth=self._auth())
+            return self._traiter_reponse(r)
+
+    def simuler_dossier(self, id_client: str) -> dict:
+        with httpx.Client(timeout=60) as client:
+            r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/simuler", auth=self._auth())
+            return self._traiter_reponse(r)
+
     # CORRECTION - lister_dossiers accepte "decision"
     
     def lister_dossiers(self, terme="", programme="", pays="", phase="", decision="") -> list:

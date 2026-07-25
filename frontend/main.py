@@ -1037,6 +1037,15 @@ def main(page: ft.Page):
                 page.overlay.append(dialogue)
                 dialogue.open = True
                 page.update()
+            
+            def action_regenerer_diagnostic(e):
+                try:
+                    reponse = client_api.regenerer_diagnostic(id_client)
+                    notification(page, "Diagnostic régénéré avec succès.")
+                    # Recharger la page pour afficher le nouveau diagnostic
+                    page.go(f"/dossier/{id_client}")
+                except ErreurAPI as err:
+                    notification(page, f"Erreur : {err.message}", succes=False)            
 
             def action_pdf(e):
                 page.launch_url(client_api.telecharger_pdf_url(id_client))
@@ -1083,6 +1092,8 @@ def main(page: ft.Page):
 
             def action_modifier(e):
                 aller_vers(f"/modifier-dossier/{id_client}")
+            
+
 
             actions_disponibles = []
             if est_archive:
@@ -1194,6 +1205,16 @@ def main(page: ft.Page):
                 ),
                 ft.Container(height=20),
                 ft.Row([
+                    ft.ElevatedButton(
+                            content=ft.Row([
+                                ft.Icon(ft.icons.REFRESH, color="#FFFFFF"),
+                                ft.Text("Régénérer le diagnostic IA")
+                            ], spacing=8),
+                            bgcolor=BLEU_GLACIER,
+                            color="#FFFFFF",
+                            on_click=action_regenerer_diagnostic
+                        ),                    
+                    
                     ft.ElevatedButton(
                         content=ft.Row([
                             ft.Icon(ft.icons.PICTURE_AS_PDF_OUTLINED, color="#FFFFFF"),
@@ -1469,7 +1490,7 @@ def main(page: ft.Page):
             def finaliser_et_afficher(id_client: str, zone: ft.Column):
                 """Fonction callback appelée après l'animation de l'orbe IA."""
                 try:
-                    complet = client_api.diagnostic_complet(id_client)
+                    complet = client_api.simuler_dossier(id_client)
                     resultat = complet.get("resultat") or {}
                     scenarios = complet.get("scenarios") or []
                     diagnostic_texte = complet.get("diagnostic_ia") or "Non disponible."
