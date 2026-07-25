@@ -644,10 +644,16 @@ def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: byte
     message.set_content(corps)
     message.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=nom_fichier)
 
-    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as serveur:
-        serveur.login(expediteur, mot_de_passe_app)
-        serveur.send_message(message)
-        logger.info(f"Message envoyé via SMTP à {destinataire}")
+    # Utiliser le port 587 avec STARTTLS (au lieu de 465 en SSL)
+    try:
+        with smtplib.SMTP('smtp.gmail.com', 587) as serveur:
+            serveur.starttls()                 # Activation du chiffrement
+            serveur.login(expediteur, mot_de_passe_app)
+            serveur.send_message(message)
+            logger.info(f"Email envoyé avec succès à {destinataire}")
+    except Exception as e:
+        logger.error(f"Erreur lors de l'envoi SMTP : {e}")
+        raise
 
 
 
