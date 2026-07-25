@@ -8,3 +8,7 @@ sqlalchemy
 psycopg2-binary
 python-dotenv
 fpdf2
+fastapi
+uvicorn[standard]
+pydantic
+requests
