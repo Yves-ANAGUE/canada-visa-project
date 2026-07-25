@@ -49,10 +49,9 @@ def main(page: ft.Page):
     client_api = ClientAPI()
     historique_nav = {"pile": [], "position": -1}
     page.sidebar_visible = True
+    page.sidebar_container = None
 
-    def toggle_sidebar(e):
-        page.sidebar_visible = not page.sidebar_visible
-        page.update()
+    
 
     def aller_vers(route: str, empiler: bool = True):
         if empiler:
@@ -181,8 +180,10 @@ def main(page: ft.Page):
     
     
     def toggle_sidebar(e):
-        page.sidebar_visible = not page.sidebar_visible
-        page.update()    
+        if page.sidebar_container is not None:
+            page.sidebar_container.visible = not page.sidebar_container.visible
+            page.sidebar_visible = page.sidebar_container.visible
+            page.update()   
     
 # CORRECTION dans main.py - mise_en_page() passe desormais
 # aller_vers, retour_navigation, avancer_navigation
@@ -190,7 +191,6 @@ def main(page: ft.Page):
     def mise_en_page(route_active: str, titre: str, construire_contenu) -> ft.View:
         corps = ft.Column([superposition_chargement()], expand=True)
         
-        # Barre de titre avec flèches + bouton menu + titre
         barre_titre = ft.Row(
             [
                 ft.IconButton(
@@ -227,20 +227,27 @@ def main(page: ft.Page):
             expand=True,
         )
         
+        # Créer ou mettre à jour le container de sidebar
         sidebar = barre_laterale(page, client_api, route_active, aller_vers)
-        sidebar_container = ft.Container(
-            content=sidebar,
-            width=250,
-            visible=page.sidebar_visible,  # utilise visible, pas width animée
-            clip_behavior=ft.ClipBehavior.HARD_EDGE,
-        )
+        if page.sidebar_container is None:
+            page.sidebar_container = ft.Container(
+                content=sidebar,
+                width=250,
+                visible=page.sidebar_visible,
+                clip_behavior=ft.ClipBehavior.HARD_EDGE,
+            )
+        else:
+            # On met à jour le contenu (route active) et la visibilité
+            page.sidebar_container.content = sidebar
+            page.sidebar_container.visible = page.sidebar_visible
+            page.sidebar_container.width = 250 if page.sidebar_visible else 0
         
         vue = ft.View(
             route_active,
             controls=[
                 ft.Row(
                     [
-                        sidebar_container,
+                        page.sidebar_container,
                         ft.Container(
                             content=conteneur_page,
                             expand=True,

@@ -30,10 +30,20 @@ from sklearn.metrics import (
 from imblearn.pipeline import Pipeline as ImbPipeline
 from imblearn.over_sampling import SMOTE
 
-from backend.utils import (
-    FUNDS_BY_YEAR, EXTRA_FUNDS_PER_DEPENDANT, FRANCOPHONE_COUNTRIES,
-    COLONNES_BRUTES_ATTENDUES
-)
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+try:
+    # Tentative d'import normal (pour Render)
+    from backend.utils import (
+        FUNDS_BY_YEAR, EXTRA_FUNDS_PER_DEPENDANT, FRANCOPHONE_COUNTRIES,
+        COLONNES_BRUTES_ATTENDUES
+    )
+except ModuleNotFoundError:
+    # Fallback pour GitHub Actions (exécution depuis la racine)
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    from utils import (
+        FUNDS_BY_YEAR, EXTRA_FUNDS_PER_DEPENDANT, FRANCOPHONE_COUNTRIES,
+        COLONNES_BRUTES_ATTENDUES
+    )
 
 load_dotenv()
 

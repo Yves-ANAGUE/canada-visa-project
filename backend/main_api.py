@@ -597,13 +597,29 @@ def endpoint_telecharger_pdf(id_client: str, agent: dict = Depends(verifier_iden
     )
 
 @app.post("/dossiers/{id_client}/envoyer-email")
-def endpoint_envoyer_email(id_client: str, agent: dict = Depends(verifier_identifiants)):
+def endpoint_envoyer_email(id_client: str, background_tasks: BackgroundTasks, agent: dict = Depends(verifier_identifiants)):
     dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client)
     if not dossier.get('email'):
         raise HTTPException(status_code=400, detail="Aucune adresse e-mail enregistree pour ce dossier")
+    
     metriques = endpoint_metriques_modele(agent)
-    pdf_bytes = generer_pdf_diagnostic(dossier, resultat, diagnostic, scenarios, metriques)
+    
+    # Tâche asynchrone
+    background_tasks.add_task(
+        _envoyer_email_async,
+        dossier=dossier,
+        resultat=resultat,
+        diagnostic=diagnostic,
+        scenarios=scenarios,
+        metriques=metriques,
+        id_client=id_client
+    )
+    
+    return {"statut": "Email en cours d'envoi (traitement asynchrone)", "destinataire": dossier['email']}
+
+def _envoyer_email_async(dossier: dict, resultat: dict, diagnostic: str, scenarios: list, metriques: dict, id_client: str):
     try:
+        pdf_bytes = generer_pdf_diagnostic(dossier, resultat, diagnostic, scenarios, metriques)
         envoyer_email_pdf(
             destinataire=dossier['email'],
             sujet="Votre rapport d'evaluation - HI Consulting Immigration",
@@ -620,9 +636,7 @@ def endpoint_envoyer_email(id_client: str, agent: dict = Depends(verifier_identi
             nom_fichier=f"rapport_{id_client}.pdf"
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Erreur lors de l'envoi de l'email : {str(e)}")
-    return {"statut": "Email envoye avec succes", "destinataire": dossier['email']}
-
+        logger.error(f"Erreur envoi email pour {id_client} : {e}")
 
 @app.get("/dossiers/{id_client}/diagnostic-complet")
 def endpoint_diagnostic_complet(id_client: str, agent: dict = Depends(verifier_identifiants)):

@@ -732,7 +732,7 @@ Le modèle ML avait prédit : {resultat_prediction['decision_predite']} ({result
 
 4. Quelle leçon tirer pour de futurs dossiers similaires ?
 
-📝 Rédige une analyse rétrospective détaillée de 100-150 mots en français, professionnelle et pédagogique.
+📝 Rédige une analyse rétrospective détaillée de 100-120 mots en français, professionnelle et pédagogique.
 Structure ta réponse : d'abord un résumé du dossier et de la décision, puis l'analyse des facteurs clés, les actions recommandées, et enfin la leçon à retenir.
 """
     else:
@@ -780,7 +780,7 @@ Structure ta réponse : d'abord un résumé du dossier et de la décision, puis 
 
 {recommandations_simulateur}
 
-📝 Rédige un diagnostic de 100-150 mots en français, professionnel et bienveillant.
+📝 Rédige un diagnostic de 100-120 mots en français, professionnel et bienveillant.
 Structure ta réponse :
 1. RÉSUMÉ : Présente le profil et la décision prédite.
 2. POINTS FORTS : Identifie 2-3 atouts du dossier.
@@ -804,7 +804,7 @@ Structure ta réponse :
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
-        "max_tokens": 800  # ← augmenté
+        "max_tokens": 1000  # ← augmenté
     }
 
     try:
