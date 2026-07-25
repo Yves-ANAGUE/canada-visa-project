@@ -1042,9 +1042,8 @@ def main(page: ft.Page):
                 try:
                     reponse = client_api.regenerer_diagnostic(id_client)
                     notification(page, "Diagnostic régénéré avec succès.")
-                    
-                    
-                    page.go(page.route)
+                    # Recharger la page pour afficher le nouveau diagnostic
+                    page.go(f"/dossier/{id_client}")
                 except ErreurAPI as err:
                     notification(page, f"Erreur : {err.message}", succes=False)            
 
