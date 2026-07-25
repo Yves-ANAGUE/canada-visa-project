@@ -610,7 +610,7 @@ def generer_pdf_diagnostic(dossier: dict, resultat_prediction: dict, diagnostic_
             pdf.cell(30, 5, decision_scenario, border=1, ln=1, align='C')
 
     # ---- Pied de page ----
-    pdf.set_y(-42)
+    pdf.set_y(-30)
     pdf.set_draw_color(216, 6, 33)
     pdf.line(15, pdf.get_y() - 3, 195, pdf.get_y() - 3)
     pdf.set_font('Helvetica', 'I', 8)
