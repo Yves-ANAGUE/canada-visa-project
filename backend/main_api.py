@@ -635,8 +635,9 @@ def _envoyer_email_async(dossier: dict, resultat: dict, diagnostic: str, scenari
             pdf_bytes=pdf_bytes,
             nom_fichier=f"rapport_{id_client}.pdf"
         )
+        logger.info(f"Email envoyé avec succès à {dossier['email']} pour le dossier {id_client}")
     except Exception as e:
-        logger.error(f"Erreur envoi email pour {id_client} : {e}")
+        logger.error(f"Erreur lors de l'envoi de l'email pour {id_client} : {e}", exc_info=True)
 
 @app.get("/dossiers/{id_client}/diagnostic-complet")
 def endpoint_diagnostic_complet(id_client: str, agent: dict = Depends(verifier_identifiants)):

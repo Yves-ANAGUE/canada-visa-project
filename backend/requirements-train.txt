@@ -7,3 +7,4 @@ joblib
 sqlalchemy
 psycopg2-binary
 python-dotenv
+fpdf2
