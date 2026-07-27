@@ -143,7 +143,7 @@ class ClientAPI:
     # NOUVELLES METHODES A AJOUTER
     
     def diagnostic_complet(self, id_client: str) -> dict:
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=240) as client:   # ← 240 secondes
             r = client.get(f"{API_BASE_URL}/dossiers/{id_client}/diagnostic-complet", auth=self._auth())
             return self._traiter_reponse(r)
 

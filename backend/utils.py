@@ -768,7 +768,7 @@ Le modèle ML avait prédit : {resultat_prediction['decision_predite']} ({result
 4. Quelle leçon tirer pour de futurs dossiers similaires ?
 
 📝 Rédige une analyse rétrospective détaillée de 100-120 mots en français, professionnelle et pédagogique.
-Structure ta réponse : d'abord un résumé du dossier et de la décision, puis l'analyse des facteurs clés, les actions recommandées, et enfin la leçon à retenir.
+Structure ta réponse : d'abord un résumé du dossier et de la décision, puis l'analyse des facteurs clés, les actions recommandées, et enfin la leçon à retenir. Interdiction absolue de commenter tes propres consignes ou de répéter la demande de l'utilisateur, produis directement le contenu final demandé.
 """
     else:
         recommandations_simulateur = ""
@@ -826,7 +826,7 @@ Structure ta réponse :
 - Tes recommandations doivent être cohérentes avec les gains du simulateur.
 - Si le dossier est incomplet, insiste sur la nécessité de compléter les champs manquants.
 - Sois positif et constructif.
-- N'invente pas de chiffres. Utilise les données fournies.
+- N'invente pas de chiffres. Utilise les données fournies. Interdiction absolue de commenter tes propres consignes ou de répéter la demande de l'utilisateur, produis directement le contenu final demandé.
 """
 
     headers = {
