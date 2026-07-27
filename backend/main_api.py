@@ -1157,6 +1157,18 @@ def endpoint_repartition_decision(agent: dict = Depends(verifier_identifiants)):
         )).fetchall()
     return [dict(r._mapping) for r in lignes]
 
+from fastapi import FastAPI, Response
+
+@app.head("/sante")
+async def sante_head():
+    """
+    HEAD request pour les monitors (Uptime Robot, etc.)
+    """
+    return Response(status_code=200, headers={
+        "Content-Type": "application/json",
+        "X-Status": "ok"
+    })
+
 # backend/main_api.py
 import os
 
