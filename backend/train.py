@@ -346,8 +346,8 @@ def _convertir_en_python(valeur):
     return valeur
 
 def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, declenchement='planifie'):
-    import logging
-    logger = logging.getLogger('train_canada')
+    import sys
+    print("=== DEBUT sauvegarder_si_qualite_suffisante ===", flush=True)
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
     with engine.connect() as conn:
@@ -361,7 +361,7 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     
     if ancien is None:
         valide = True
-        logger.info("Premier modèle : sauvegarde automatique.")
+        print("Premier modèle : sauvegarde automatique.", flush=True)
     else:
         ancienne_precision, ancien_recall, ancien_f1, ancien_roc_auc = ancien
         nouvelle_precision = meilleur['precision']
@@ -381,78 +381,68 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
         
         valide = nb_ameliorations >= 2
         
-        logger.info(f"Comparaison avec ancien modèle (Précision {ancienne_precision:.3f} / "
-                    f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})")
-        logger.info(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
-                    f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
-        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
+        print(f"Comparaison avec ancien modèle (Précision {ancienne_precision:.3f} / "
+              f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})", flush=True)
+        print(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
+              f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}", flush=True)
+        print(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'ACCEPTÉ' if valide else 'REJETÉ'}", flush=True)
     
     if valide:
         joblib.dump(pipeline, 'modele_canada.pkl')
         joblib.dump(seuil_decision, 'seuil_decision.pkl')
         joblib.dump(pipeline.named_steps['preprocessor'], 'preprocessor_canada.pkl')
-        logger.info(f"✅ Nouveau modèle et préprocesseur sauvegardés.")
+        print("✅ Nouveau modèle et préprocesseur sauvegardés.", flush=True)
     else:
-        logger.info(f"❌ Modèle rejeté, ancien conservé.")
+        print("❌ Modèle rejeté, ancien conservé.", flush=True)
 
     # === INSERTION DANS L'HISTORIQUE ===
-    logger.info("Tentative d'insertion dans historique_entrainement...")
-    
-    # Vérification des données avant insertion
-    logger.info(f"meilleur contient : {meilleur.keys()}")
-    logger.info(f"modele = {meilleur.get('modele', 'inconnu')}")
-    logger.info(f"n_train = {meilleur.get('n_train', 0)}")
-    
+    print("Tentative d'insertion dans historique_entrainement...", flush=True)
     try:
         with engine.connect() as conn:
-            # On commence une transaction explicite
-            trans = conn.begin()
-            try:
-                # Vérifier que la colonne specificity_score existe
-                result = conn.execute(text("""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = 'historique_entrainement' 
-                    AND column_name = 'specificity_score'
-                """)).fetchone()
-                has_specificity = result is not None
-                
-                colonnes = ['declenchement', 'accuracy', 'precision_score', 'recall_score', 'f1_score', 'roc_auc', 'modele_valide', 'nb_dossiers_train', 'modele_choisi']
-                valeurs = {
-                    "d": declenchement,
-                    "a": float(meilleur['accuracy']),
-                    "p": float(meilleur['precision']),
-                    "r": float(meilleur['recall']),
-                    "f": float(meilleur['f1']),
-                    "auc": float(meilleur['roc_auc']),
-                    "v": valide,
-                    "n": int(meilleur.get('n_train', 0)),
-                    "m": str(meilleur.get('modele', 'inconnu'))  # Forcé en string
-                }
-                if has_specificity:
-                    colonnes.append('specificity_score')
-                    valeurs['sp'] = float(meilleur.get('specificity', 0))
-                
-                sql = f"""
-                    INSERT INTO historique_entrainement
-                    ({', '.join(colonnes)})
-                    VALUES ({', '.join(':' + c for c in colonnes)})
-                """
-                logger.info(f"SQL : {sql}")
-                logger.info(f"Valeurs : {valeurs}")
-                
-                conn.execute(text(sql), valeurs)
-                trans.commit()
-                logger.info(f"✅ Insertion réussie (modele_valide={valide}).")
-            except Exception as e:
-                trans.rollback()
-                logger.error(f"Erreur lors de l'insertion (transaction rollback) : {e}")
-                raise
+            # Vérifier si la colonne specificity_score existe
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'historique_entrainement' 
+                AND column_name = 'specificity_score'
+            """)).fetchone()
+            has_specificity = result is not None
+            if not has_specificity:
+                print("⚠️ La colonne specificity_score n'existe pas dans la table, elle sera ignorée.", flush=True)
+            
+            colonnes = ['declenchement', 'accuracy', 'precision_score', 'recall_score', 'f1_score', 'roc_auc', 'modele_valide', 'nb_dossiers_train', 'modele_choisi']
+            valeurs = {
+                "d": declenchement,
+                "a": float(meilleur['accuracy']),
+                "p": float(meilleur['precision']),
+                "r": float(meilleur['recall']),
+                "f": float(meilleur['f1']),
+                "auc": float(meilleur['roc_auc']),
+                "v": valide,
+                "n": int(meilleur.get('n_train', 0)),
+                "m": str(meilleur.get('modele', 'inconnu'))
+            }
+            if has_specificity:
+                colonnes.append('specificity_score')
+                valeurs['sp'] = float(meilleur.get('specificity', 0))
+            
+            sql = f"""
+                INSERT INTO historique_entrainement
+                ({', '.join(colonnes)})
+                VALUES ({', '.join(':' + c for c in colonnes)})
+            """
+            print(f"SQL : {sql}", flush=True)
+            print(f"Valeurs : {valeurs}", flush=True)
+            
+            conn.execute(text(sql), valeurs)
+            conn.commit()
+            print("✅ Insertion réussie.", flush=True)
     except Exception as e:
-        logger.error(f"❌ ERREUR fatale lors de l'insertion : {e}", exc_info=True)
+        print(f"❌ ERREUR lors de l'insertion : {e}", flush=True)
         raise  # Propage l'erreur pour que le workflow échoue
 
     engine.dispose()
+    print("=== FIN sauvegarder_si_qualite_suffisante ===", flush=True)
     return valide
 
 
