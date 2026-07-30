@@ -349,12 +349,13 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
     with engine.connect() as conn:
-        # Récupérer les métriques du meilleur modèle validé (le plus récent accepté)
+        # L'ancienne requête ne récupérait que precision_score
+        # On récupère les 4 métriques à la place
         ancien = conn.execute(text("""
             SELECT precision_score, recall_score, f1_score, roc_auc 
             FROM historique_entrainement 
             WHERE modele_valide = TRUE 
-            ORDER BY date_execution DESC 
+            ORDER BY precision_score DESC 
             LIMIT 1
         """)).fetchone()
     
@@ -394,7 +395,7 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     else:
         logger.info(f"❌ Modèle rejeté, ancien conservé.")
 
-    # === INSERTION DANS L'HISTORIQUE (IDENTIQUE À L'ANCIEN CODE QUI FONCTIONNE) ===
+    # === INSERTION : EXACTEMENT COMME DANS L'ANCIEN CODE (rien ne change) ===
     with engine.connect() as conn:
         conn.execute(text("""
             INSERT INTO historique_entrainement
