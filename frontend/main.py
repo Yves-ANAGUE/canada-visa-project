@@ -9,7 +9,7 @@ from datetime import date
 
 from sqlalchemy import Engine, text
 
-from theme import construire_theme, ROUGE_CANADA, GRIS_TEXTE, GRIS_CLAIR, BLANC, VERT_SUCCES, GRIS_MOYEN, ENTREPRISE, BLEU_GLACIER, OR_ERABLE, ORANGE_ALERTE
+from theme import construire_theme, ROUGE_CANADA, GRIS_TEXTE, GRIS_CLAIR, BLANC, VERT_SUCCES, GRIS_MOYEN, ENTREPRISE, BLEU_GLACIER, OR_ERABLE, ORANGE_ALERTE, NOIR_DOUX
 from reference_data import (
     OPTIONS_SEXE, OPTIONS_STATUT_MATRIMONIAL, OPTIONS_EDUCATION, OPTIONS_OUI_NON,
     OPTIONS_TEST_ANGLAIS, OPTIONS_TEST_FRANCAIS, OPTIONS_SECTEUR, OPTIONS_TEER,
@@ -439,7 +439,7 @@ def main(page: ft.Page):
                                 from_y=0,
                                 to_y=row['precision'] * 100,
                                 width=10,
-                                color=GRIS_MOYEN,
+                                color=NOIR_DOUX,
                                 border_radius=3,
                                 tooltip=f"Précision: {row['precision']*100:.1f}%"
                             ),
@@ -465,7 +465,7 @@ def main(page: ft.Page):
             
             # Légende plus explicite avec des couleurs bien distinctes
             legende = ft.Row([
-                ft.Row([ft.Container(width=16, height=16, bgcolor=GRIS_MOYEN, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
+                ft.Row([ft.Container(width=16, height=16, bgcolor=NOIR_DOUX, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=ROUGE_CANADA, border_radius=4), ft.Text("Rappel", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=OR_ERABLE, border_radius=4), ft.Text("F1", size=13, weight=ft.FontWeight.W_500)], spacing=8),
             ], spacing=24)
