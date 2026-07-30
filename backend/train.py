@@ -349,11 +349,9 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
     with engine.connect() as conn:
-        # L'ancienne requête ne récupérait que precision_score
-        # On récupère les 4 métriques à la place
+        # On récupère tout l'enregistrement de l'ancien meilleur modèle
         ancien = conn.execute(text("""
-            SELECT precision_score, recall_score, f1_score, roc_auc 
-            FROM historique_entrainement 
+            SELECT * FROM historique_entrainement 
             WHERE modele_valide = TRUE 
             ORDER BY precision_score DESC 
             LIMIT 1
@@ -363,7 +361,13 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
         valide = True
         logger.info("Premier modèle : sauvegarde automatique.")
     else:
-        ancienne_precision, ancien_recall, ancien_f1, ancien_roc_auc = ancien
+        # On extrait les valeurs par nom de colonne
+        ancien_dict = dict(ancien._mapping)
+        ancienne_precision = ancien_dict.get('precision_score', 0)
+        ancien_recall = ancien_dict.get('recall_score', 0)
+        ancien_f1 = ancien_dict.get('f1_score', 0)
+        ancien_roc_auc = ancien_dict.get('roc_auc', 0)
+        
         nouvelle_precision = meilleur['precision']
         nouveau_recall = meilleur['recall']
         nouveau_f1 = meilleur['f1']
