@@ -418,8 +418,13 @@ def main(page: ft.Page):
                     f"F1-Score {float(m['f1_score'])*100:.1f}% - ROC-AUC {float(m['roc_auc']):.4f}")
 
         def construire_graphique_performance(donnees: list, label_axe: str, titre: str) -> ft.Column:
+            """
+            Construit un graphique à barres groupées (Précision, Recall, F1) pour un segment donné.
+            Les labels sont tronqués pour éviter le chevauchement, la légende est agrandie.
+            """
             if not donnees:
                 return ft.Text("Aucune donnée disponible", size=12, color=GRIS_MOYEN)
+            
             import pandas as pd
             df_display = pd.DataFrame(donnees)
             df_display = df_display.sort_values('f1', ascending=False)
@@ -458,31 +463,42 @@ def main(page: ft.Page):
                     )
                 )
             
+            # Légende plus explicite avec des couleurs bien distinctes
             legende = ft.Row([
-                ft.Row([ft.Container(width=14, height=14, bgcolor=BLEU_GLACIER, border_radius=3), ft.Text("Précision", size=12, weight=ft.FontWeight.W_500)], spacing=6),
-                ft.Row([ft.Container(width=14, height=14, bgcolor=ROUGE_CANADA, border_radius=3), ft.Text("Rappel", size=12, weight=ft.FontWeight.W_500)], spacing=6),
-                ft.Row([ft.Container(width=14, height=14, bgcolor=OR_ERABLE, border_radius=3), ft.Text("F1", size=12, weight=ft.FontWeight.W_500)], spacing=6),
-            ], spacing=20)
+                ft.Row([ft.Container(width=16, height=16, bgcolor=BLEU_GLACIER, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
+                ft.Row([ft.Container(width=16, height=16, bgcolor=ROUGE_CANADA, border_radius=4), ft.Text("Rappel", size=13, weight=ft.FontWeight.W_500)], spacing=8),
+                ft.Row([ft.Container(width=16, height=16, bgcolor=OR_ERABLE, border_radius=4), ft.Text("F1", size=13, weight=ft.FontWeight.W_500)], spacing=8),
+            ], spacing=24)
             
+            # Troncature des labels longs (max 12 caractères)
             labels = [row[label_axe] for _, row in df_display.iterrows()]
-            # Troncature et rotation
-            labels_display = [l[:15] + "..." if len(l) > 15 else l for l in labels]
+            labels_display = []
+            for l in labels:
+                if len(l) > 12:
+                    labels_display.append(l[:12] + "…")
+                else:
+                    labels_display.append(l)
             
             graphique = ft.BarChart(
                 bar_groups=groupes,
                 border=ft.border.all(1, "#E5E7EB"),
                 left_axis=ft.ChartAxis(labels_size=40),
                 bottom_axis=ft.ChartAxis(
-                    labels=[ft.ChartAxisLabel(value=i, label=ft.Text(labels_display[i], size=9, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)) for i in range(len(labels_display))],
-                    labels_size=60,  # Augmenté pour laisser de la place
+                    labels=[ft.ChartAxisLabel(value=i, label=ft.Text(labels_display[i], size=10, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)) for i in range(len(labels_display))],
+                    labels_size=60,  # Augmenté pour éviter le chevauchement
                     title=ft.Text(label_axe.capitalize(), size=10, weight=ft.FontWeight.W_600)
                 ),
                 horizontal_grid_lines=ft.ChartGridLines(color="#EDEEF1", width=1),
                 animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-                height=300,  # Légèrement plus haut
+                height=320,  # Un peu plus haut pour la lisibilité
             )
             
-            return ft.Column([ft.Text(titre, size=13, weight=ft.FontWeight.W_600), graphique, ft.Container(height=8), legende])
+            return ft.Column([
+                ft.Text(titre, size=14, weight=ft.FontWeight.W_600),
+                graphique,
+                ft.Container(height=8),
+                legende
+            ], spacing=4)
 
         def construire():
             
