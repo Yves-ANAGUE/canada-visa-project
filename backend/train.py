@@ -346,55 +346,76 @@ def _convertir_en_python(valeur):
     return valeur
 
 def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, declenchement='planifie'):
-    import sys
-    import traceback
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
-    try:
-        with engine.connect() as conn:
-            ancien = conn.execute(text("""
-                SELECT precision_score FROM historique_entrainement 
-                WHERE modele_valide = TRUE 
-                ORDER BY precision_score DESC 
-                LIMIT 1
-            """)).fetchone()
-            ancienne_precision = ancien[0] if ancien else 0
-        
+    with engine.connect() as conn:
+        # Récupérer les métriques de l'ancien meilleur modèle
+        ancien = conn.execute(text("""
+            SELECT precision_score, recall_score, f1_score, roc_auc 
+            FROM historique_entrainement 
+            WHERE modele_valide = TRUE 
+            ORDER BY date_execution DESC 
+            LIMIT 1
+        """)).fetchone()
+    
+    if ancien is None:
+        valide = True
+        logger.info("Premier modèle : sauvegarde automatique.")
+    else:
+        ancienne_precision, ancien_recall, ancien_f1, ancien_roc_auc = ancien
         nouvelle_precision = meilleur['precision']
-        est_meilleur = nouvelle_precision > ancienne_precision
-        valide = est_meilleur
+        nouveau_recall = meilleur['recall']
+        nouveau_f1 = meilleur['f1']
+        nouveau_roc_auc = meilleur['roc_auc']
         
-        if valide:
-            joblib.dump(pipeline, 'modele_canada.pkl')
-            joblib.dump(seuil_decision, 'seuil_decision.pkl')
-            print(f"✅ Nouveau modèle sauvegardé : Precision {nouvelle_precision:.3f} (vs ancien {ancienne_precision:.3f})", flush=True)
-        else:
-            print(f"❌ Modèle rejeté : Precision {nouvelle_precision:.3f} (ancien meilleur : {ancienne_precision:.3f})", flush=True)
+        # Compter combien de métriques se sont améliorées (tolérance de 2%)
+        nb_ameliorations = 0
+        if nouvelle_precision > ancienne_precision * 0.98:
+            nb_ameliorations += 1
+        if nouveau_recall > ancien_recall * 0.98:
+            nb_ameliorations += 1
+        if nouveau_f1 > ancien_f1 * 0.98:
+            nb_ameliorations += 1
+        if nouveau_roc_auc > ancien_roc_auc * 0.98:
+            nb_ameliorations += 1
+        
+        # Accepté si au moins 2 métriques sur 4 sont améliorées
+        valide = nb_ameliorations >= 2
+        
+        logger.info(f"Comparaison avec ancien modèle (Précision {ancienne_precision:.3f} / "
+                    f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})")
+        logger.info(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
+                    f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
+        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
+    
+    # Sauvegarde conditionnelle (seulement si validé)
+    if valide:
+        joblib.dump(pipeline, 'modele_canada.pkl')
+        joblib.dump(seuil_decision, 'seuil_decision.pkl')
+        joblib.dump(pipeline.named_steps['preprocessor'], 'preprocessor_canada.pkl')
+        logger.info(f"✅ Nouveau modèle et préprocesseur sauvegardés.")
+    else:
+        logger.info(f"❌ Modèle rejeté, ancien conservé.")
 
-        with engine.connect() as conn:
-            conn.execute(text("""
-                INSERT INTO historique_entrainement
-                    (declenchement, accuracy, precision_score, recall_score, specificity_score, f1_score, roc_auc, modele_valide, nb_dossiers_train, modele_choisi)
-                VALUES (:d, :a, :p, :r, :sp, :f, :auc, :v, :n, :m)
-            """), {
-                "d": declenchement,
-                "a": float(meilleur['accuracy']),
-                "p": float(meilleur['precision']),
-                "r": float(meilleur['recall']),
-                "sp": float(meilleur.get('specificity', 0)),
-                "f": float(meilleur['f1']),
-                "auc": float(meilleur['roc_auc']),
-                "v": valide,
-                "n": int(meilleur.get('n_train', 0)),
-                "m": meilleur.get('modele', 'inconnu')
-            })
-            conn.commit()
-            print(f"✅ Insertion dans historique_entrainement réussie (modele_valide={valide}).", flush=True)
-    except Exception as e:
-        print(f"❌ ERREUR dans sauvegarder_si_qualite_suffisante : {e}", flush=True)
-        print(traceback.format_exc(), flush=True)
-        raise  # Fait échouer le script si l'insertion plante
-
+    # === INSERTION DANS L'HISTORIQUE (TOUJOURS EXÉCUTÉE, COMME AVANT) ===
+    with engine.connect() as conn:
+        conn.execute(text("""
+            INSERT INTO historique_entrainement
+                (declenchement, accuracy, precision_score, recall_score, specificity_score, f1_score, roc_auc, modele_valide, nb_dossiers_train, modele_choisi)
+            VALUES (:d, :a, :p, :r, :sp, :f, :auc, :v, :n, :m)
+        """), {
+            "d": declenchement,
+            "a": float(meilleur['accuracy']),
+            "p": float(meilleur['precision']),
+            "r": float(meilleur['recall']),
+            "sp": float(meilleur.get('specificity', 0)),
+            "f": float(meilleur['f1']),
+            "auc": float(meilleur['roc_auc']),
+            "v": valide,
+            "n": int(meilleur.get('n_train', 0)),
+            "m": meilleur.get('modele', 'inconnu')
+        })
+        conn.commit()
     engine.dispose()
     return valide
 
