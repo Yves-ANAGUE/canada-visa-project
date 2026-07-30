@@ -351,13 +351,13 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     
     try:
         with engine.connect() as conn:
-            # Récupérer la précision de l'ancien meilleur modèle
-            ancien_precision = conn.execute(text("""
+            # Récupérer la précision de l'ancien meilleur modèle et la convertir en float
+            ancien_precision = float(conn.execute(text("""
                 SELECT precision_score FROM historique_entrainement 
                 WHERE modele_valide = TRUE 
                 ORDER BY precision_score DESC 
                 LIMIT 1
-            """)).scalar() or 0
+            """)).scalar() or 0.0)
         
         # Récupérer les autres métriques du même modèle (si existant)
         if ancien_precision > 0:
@@ -369,14 +369,17 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
                     ORDER BY precision_score DESC 
                     LIMIT 1
                 """)).fetchone()
-                ancien_recall, ancien_f1, ancien_roc_auc = ancien_autres if ancien_autres else (0,0,0)
+                if ancien_autres is not None:
+                    ancien_recall, ancien_f1, ancien_roc_auc = (float(x) for x in ancien_autres)
+                else:
+                    ancien_recall = ancien_f1 = ancien_roc_auc = 0.0
         else:
-            ancien_recall = ancien_f1 = ancien_roc_auc = 0
+            ancien_recall = ancien_f1 = ancien_roc_auc = 0.0
         
-        nouvelle_precision = meilleur['precision']
-        nouveau_recall = meilleur['recall']
-        nouveau_f1 = meilleur['f1']
-        nouveau_roc_auc = meilleur['roc_auc']
+        nouvelle_precision = float(meilleur['precision'])
+        nouveau_recall = float(meilleur['recall'])
+        nouveau_f1 = float(meilleur['f1'])
+        nouveau_roc_auc = float(meilleur['roc_auc'])
         
         nb_ameliorations = 0
         if nouvelle_precision > ancien_precision * 0.98:
