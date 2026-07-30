@@ -349,7 +349,7 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
     with engine.connect() as conn:
-        # Récupérer les métriques de l'ancien meilleur modèle
+        # Récupérer les métriques du meilleur modèle validé (le plus récent accepté)
         ancien = conn.execute(text("""
             SELECT precision_score, recall_score, f1_score, roc_auc 
             FROM historique_entrainement 
@@ -368,7 +368,6 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
         nouveau_f1 = meilleur['f1']
         nouveau_roc_auc = meilleur['roc_auc']
         
-        # Compter combien de métriques se sont améliorées (tolérance de 2%)
         nb_ameliorations = 0
         if nouvelle_precision > ancienne_precision * 0.98:
             nb_ameliorations += 1
@@ -379,7 +378,6 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
         if nouveau_roc_auc > ancien_roc_auc * 0.98:
             nb_ameliorations += 1
         
-        # Accepté si au moins 2 métriques sur 4 sont améliorées
         valide = nb_ameliorations >= 2
         
         logger.info(f"Comparaison avec ancien modèle (Précision {ancienne_precision:.3f} / "
@@ -388,7 +386,6 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
                     f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
         logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
     
-    # Sauvegarde conditionnelle (seulement si validé)
     if valide:
         joblib.dump(pipeline, 'modele_canada.pkl')
         joblib.dump(seuil_decision, 'seuil_decision.pkl')
@@ -397,7 +394,7 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     else:
         logger.info(f"❌ Modèle rejeté, ancien conservé.")
 
-    # === INSERTION DANS L'HISTORIQUE (TOUJOURS EXÉCUTÉE, COMME AVANT) ===
+    # === INSERTION DANS L'HISTORIQUE (IDENTIQUE À L'ANCIEN CODE QUI FONCTIONNE) ===
     with engine.connect() as conn:
         conn.execute(text("""
             INSERT INTO historique_entrainement
