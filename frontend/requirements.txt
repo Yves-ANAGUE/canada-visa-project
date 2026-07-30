@@ -2,3 +2,4 @@ flet==0.24.1
 httpx
 python-dotenv
 sqlalchemy
+pandas
