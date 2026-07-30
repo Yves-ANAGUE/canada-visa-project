@@ -1171,7 +1171,7 @@ async def sante_head():
     })
 
 # ============================================================
-# ROUTES DE PERFORMANCE PAR SEGMENT
+# ROUTES DE PERFORMANCE PAR SEGMENT (sans preprocessor_canada.pkl)
 # ============================================================
 
 @app.get("/analytics/performance-par-programme")
@@ -1181,16 +1181,16 @@ def endpoint_performance_par_programme(agent: dict = Depends(verifier_identifian
         df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
         if df.empty:
             return []
-        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = pipeline.named_steps['preprocessor']
         X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
                               'numero_document', 'date_naissance', 'email', 'telephone', 
                               'ville_residence', 'frais_encaisses', 'restes_a_payer', 
                               'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
-        y_pred = modele.predict(X_transformed)
-        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X_transformed)
+        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
         results = []
         for prog in df['program'].unique():
             mask = df['program'] == prog
@@ -1220,16 +1220,16 @@ def endpoint_performance_par_secteur(agent: dict = Depends(verifier_identifiants
         df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
         if df.empty:
             return []
-        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = pipeline.named_steps['preprocessor']
         X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
                               'numero_document', 'date_naissance', 'email', 'telephone', 
                               'ville_residence', 'frais_encaisses', 'restes_a_payer', 
                               'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
-        y_pred = modele.predict(X_transformed)
-        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X_transformed)
+        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
         results = []
         for secteur in df['sector'].unique():
             mask = df['sector'] == secteur
@@ -1259,16 +1259,16 @@ def endpoint_performance_par_education(agent: dict = Depends(verifier_identifian
         df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
         if df.empty:
             return []
-        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = pipeline.named_steps['preprocessor']
         X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
                               'numero_document', 'date_naissance', 'email', 'telephone', 
                               'ville_residence', 'frais_encaisses', 'restes_a_payer', 
                               'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
-        y_pred = modele.predict(X_transformed)
-        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X_transformed)
+        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
         results = []
         for edu in df['education_level'].unique():
             mask = df['education_level'] == edu
@@ -1298,16 +1298,16 @@ def endpoint_performance_par_francophone(agent: dict = Depends(verifier_identifi
         df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
         if df.empty:
             return []
-        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = pipeline.named_steps['preprocessor']
         X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
                               'numero_document', 'date_naissance', 'email', 'telephone', 
                               'ville_residence', 'frais_encaisses', 'restes_a_payer', 
                               'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
-        y_pred = modele.predict(X_transformed)
-        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X_transformed)
+        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
         francophone_countries = ['France','Morocco','Algeria','Tunisia','Senegal',
                                   'Cameroon','Lebanon','Haiti','Ivory Coast',
                                   'Democratic Republic of Congo']
@@ -1341,16 +1341,16 @@ def endpoint_performance_par_pays(agent: dict = Depends(verifier_identifiants)):
         df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
         if df.empty:
             return []
-        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = pipeline.named_steps['preprocessor']
         X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
                               'numero_document', 'date_naissance', 'email', 'telephone', 
                               'ville_residence', 'frais_encaisses', 'restes_a_payer', 
                               'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
-        y_pred = modele.predict(X_transformed)
-        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X_transformed)
+        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
         results = []
         for pays in df['country_of_origin'].unique():
             mask = df['country_of_origin'] == pays
