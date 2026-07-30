@@ -465,7 +465,7 @@ def main(page: ft.Page):
             
             # Légende plus explicite avec des couleurs bien distinctes
             legende = ft.Row([
-                ft.Row([ft.Container(width=16, height=16, bgcolor=BLEU_GLACIER, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
+                ft.Row([ft.Container(width=16, height=16, bgcolor=VERT_SUCCES, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=ROUGE_CANADA, border_radius=4), ft.Text("Rappel", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=OR_ERABLE, border_radius=4), ft.Text("F1", size=13, weight=ft.FontWeight.W_500)], spacing=8),
             ], spacing=24)
