@@ -43,6 +43,52 @@ USE_GITHUB_ACTIONS = os.environ.get('USE_GITHUB_ACTIONS', 'false').lower() == 't
 GITHUB_REPO = os.environ.get('GITHUB_REPO', 'Yves-ANAGUE/canada-visa-project')
 GITHUB_PAT = os.environ.get('GITHUB_PAT', '')
 
+# ============================================================
+# FONCTION DE FEATURE ENGINEERING POUR DATAFRAME COMPLET
+# (reproduit exactement les transformations du notebook)
+# ============================================================
+
+def ajouter_features_derivees(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Ajoute les colonnes dérivées nécessaires au modèle.
+    Les calculs sont identiques à ceux du notebook Jupyter.
+    """
+    df = df.copy()
+    
+    # Scores linguistiques agréges
+    df['clb_english_min'] = df[['clb_speaking_english','clb_listening_english',
+                                  'clb_reading_english','clb_writing_english']].min(axis=1)
+    df['clb_english_mean'] = df[['clb_speaking_english','clb_listening_english',
+                                   'clb_reading_english','clb_writing_english']].mean(axis=1)
+    
+    df['nclc_french_min'] = df[['nclc_speaking_french','nclc_listening_french',
+                                  'nclc_reading_french','nclc_writing_french']].min(axis=1)
+    df['nclc_french_mean'] = df[['nclc_speaking_french','nclc_listening_french',
+                                   'nclc_reading_french','nclc_writing_french']].mean(axis=1)
+    
+    # Ratio de fonds
+    funds_by_year_map = {2015:11851,2016:12164,2017:12300,2018:12475,2019:12669,
+                         2020:12960,2021:13213,2022:13310,2023:13757,2024:14690,
+                         2025:15263,2026:15263}
+    extra_dep_map = {0:0, 1:3200, 2:4000, 3:5000, 4:6500}
+    
+    df['fonds_minimum_requis'] = (
+        df['application_year'].map(funds_by_year_map).fillna(15263) +
+        df['dependants'].map(extra_dep_map).fillna(6500)
+    )
+    df['ratio_fonds'] = df['funds_available_cad'] / df['fonds_minimum_requis']
+    
+    # Indicateur francophone
+    francophone_countries = ['France','Morocco','Algeria','Tunisia','Senegal',
+                              'Cameroon','Lebanon','Haiti','Ivory Coast',
+                              'Democratic Republic of Congo']
+    df['is_francophone_country'] = df['country_of_origin'].isin(francophone_countries).astype(int)
+    
+    # Expérience totale
+    df['experience_totale'] = df['years_foreign_experience'] + df['years_canadian_experience']
+    
+    return df
+
 etat_application = {}
 
 @asynccontextmanager
@@ -103,51 +149,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ============================================================
-# FONCTION DE FEATURE ENGINEERING POUR DATAFRAME COMPLET
-# (reproduit exactement les transformations du notebook)
-# ============================================================
 
-def ajouter_features_derivees(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ajoute les colonnes dérivées nécessaires au modèle.
-    Les calculs sont identiques à ceux du notebook Jupyter.
-    """
-    df = df.copy()
-    
-    # Scores linguistiques agréges
-    df['clb_english_min'] = df[['clb_speaking_english','clb_listening_english',
-                                  'clb_reading_english','clb_writing_english']].min(axis=1)
-    df['clb_english_mean'] = df[['clb_speaking_english','clb_listening_english',
-                                   'clb_reading_english','clb_writing_english']].mean(axis=1)
-    
-    df['nclc_french_min'] = df[['nclc_speaking_french','nclc_listening_french',
-                                  'nclc_reading_french','nclc_writing_french']].min(axis=1)
-    df['nclc_french_mean'] = df[['nclc_speaking_french','nclc_listening_french',
-                                   'nclc_reading_french','nclc_writing_french']].mean(axis=1)
-    
-    # Ratio de fonds
-    funds_by_year_map = {2015:11851,2016:12164,2017:12300,2018:12475,2019:12669,
-                         2020:12960,2021:13213,2022:13310,2023:13757,2024:14690,
-                         2025:15263,2026:15263}
-    extra_dep_map = {0:0, 1:3200, 2:4000, 3:5000, 4:6500}
-    
-    df['fonds_minimum_requis'] = (
-        df['application_year'].map(funds_by_year_map).fillna(15263) +
-        df['dependants'].map(extra_dep_map).fillna(6500)
-    )
-    df['ratio_fonds'] = df['funds_available_cad'] / df['fonds_minimum_requis']
-    
-    # Indicateur francophone
-    francophone_countries = ['France','Morocco','Algeria','Tunisia','Senegal',
-                              'Cameroon','Lebanon','Haiti','Ivory Coast',
-                              'Democratic Republic of Congo']
-    df['is_francophone_country'] = df['country_of_origin'].isin(francophone_countries).astype(int)
-    
-    # Expérience totale
-    df['experience_totale'] = df['years_foreign_experience'] + df['years_canadian_experience']
-    
-    return df
 
 @app.exception_handler(Exception)
 async def gestionnaire_erreurs_global(request: Request, exc: Exception):
