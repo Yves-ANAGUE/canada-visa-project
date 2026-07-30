@@ -405,14 +405,13 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     with engine.connect() as conn:
         conn.execute(text("""
             INSERT INTO historique_entrainement
-                (declenchement, accuracy, precision_score, recall_score, specificity_score, f1_score, roc_auc, modele_valide, nb_dossiers_train, modele_choisi)
-            VALUES (:d, :a, :p, :r, :sp, :f, :auc, :v, :n, :m)
+                (declenchement, accuracy, precision_score, recall_score, f1_score, roc_auc, modele_valide, nb_dossiers_train, modele_choisi)
+            VALUES (:d, :a, :p, :r, :f, :auc, :v, :n, :m)
         """), {
             "d": declenchement,
             "a": float(meilleur['accuracy']),
             "p": float(meilleur['precision']),
             "r": float(meilleur['recall']),
-            "sp": float(meilleur.get('specificity', 0)),
             "f": float(meilleur['f1']),
             "auc": float(meilleur['roc_auc']),
             "v": valide,
