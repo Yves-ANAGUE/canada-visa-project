@@ -21,6 +21,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import create_engine, text
 from fastapi import Request
 import requests as requests_lib
+from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
 
 from backend.utils import (
     predire_client, hacher_mot_de_passe, verifier_mot_de_passe,
@@ -1168,6 +1169,210 @@ async def sante_head():
         "Content-Type": "application/json",
         "X-Status": "ok"
     })
+
+# ============================================================
+# ROUTES DE PERFORMANCE PAR SEGMENT
+# ============================================================
+
+@app.get("/analytics/performance-par-programme")
+def endpoint_performance_par_programme(agent: dict = Depends(verifier_identifiants)):
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
+        if df.empty:
+            return []
+        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
+                              'numero_document', 'date_naissance', 'email', 'telephone', 
+                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
+                              'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
+        y = (df['visa_decision'] == 'Accepted').astype(int)
+        X_transformed = preprocessor.transform(X)
+        y_pred = modele.predict(X_transformed)
+        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        results = []
+        for prog in df['program'].unique():
+            mask = df['program'] == prog
+            if mask.sum() < 5:
+                continue
+            y_true = y[mask]
+            y_pred_seg = y_pred[mask]
+            y_proba_seg = y_proba[mask]
+            prec = precision_score(y_true, y_pred_seg, zero_division=0)
+            rec = recall_score(y_true, y_pred_seg, zero_division=0)
+            f1 = f1_score(y_true, y_pred_seg, zero_division=0)
+            acc = accuracy_score(y_true, y_pred_seg)
+            results.append({
+                "program": prog,
+                "n": int(mask.sum()),
+                "precision": round(prec, 4),
+                "recall": round(rec, 4),
+                "f1": round(f1, 4),
+                "accuracy": round(acc, 4)
+            })
+        return results
+
+@app.get("/analytics/performance-par-secteur")
+def endpoint_performance_par_secteur(agent: dict = Depends(verifier_identifiants)):
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
+        if df.empty:
+            return []
+        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
+                              'numero_document', 'date_naissance', 'email', 'telephone', 
+                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
+                              'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
+        y = (df['visa_decision'] == 'Accepted').astype(int)
+        X_transformed = preprocessor.transform(X)
+        y_pred = modele.predict(X_transformed)
+        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        results = []
+        for secteur in df['sector'].unique():
+            mask = df['sector'] == secteur
+            if mask.sum() < 5:
+                continue
+            y_true = y[mask]
+            y_pred_seg = y_pred[mask]
+            y_proba_seg = y_proba[mask]
+            prec = precision_score(y_true, y_pred_seg, zero_division=0)
+            rec = recall_score(y_true, y_pred_seg, zero_division=0)
+            f1 = f1_score(y_true, y_pred_seg, zero_division=0)
+            acc = accuracy_score(y_true, y_pred_seg)
+            results.append({
+                "sector": secteur,
+                "n": int(mask.sum()),
+                "precision": round(prec, 4),
+                "recall": round(rec, 4),
+                "f1": round(f1, 4),
+                "accuracy": round(acc, 4)
+            })
+        return results
+
+@app.get("/analytics/performance-par-education")
+def endpoint_performance_par_education(agent: dict = Depends(verifier_identifiants)):
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
+        if df.empty:
+            return []
+        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
+                              'numero_document', 'date_naissance', 'email', 'telephone', 
+                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
+                              'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
+        y = (df['visa_decision'] == 'Accepted').astype(int)
+        X_transformed = preprocessor.transform(X)
+        y_pred = modele.predict(X_transformed)
+        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        results = []
+        for edu in df['education_level'].unique():
+            mask = df['education_level'] == edu
+            if mask.sum() < 5:
+                continue
+            y_true = y[mask]
+            y_pred_seg = y_pred[mask]
+            y_proba_seg = y_proba[mask]
+            prec = precision_score(y_true, y_pred_seg, zero_division=0)
+            rec = recall_score(y_true, y_pred_seg, zero_division=0)
+            f1 = f1_score(y_true, y_pred_seg, zero_division=0)
+            acc = accuracy_score(y_true, y_pred_seg)
+            results.append({
+                "education_level": edu,
+                "n": int(mask.sum()),
+                "precision": round(prec, 4),
+                "recall": round(rec, 4),
+                "f1": round(f1, 4),
+                "accuracy": round(acc, 4)
+            })
+        return results
+
+@app.get("/analytics/performance-par-francophone")
+def endpoint_performance_par_francophone(agent: dict = Depends(verifier_identifiants)):
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
+        if df.empty:
+            return []
+        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
+                              'numero_document', 'date_naissance', 'email', 'telephone', 
+                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
+                              'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
+        y = (df['visa_decision'] == 'Accepted').astype(int)
+        X_transformed = preprocessor.transform(X)
+        y_pred = modele.predict(X_transformed)
+        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        francophone_countries = ['France','Morocco','Algeria','Tunisia','Senegal',
+                                  'Cameroon','Lebanon','Haiti','Ivory Coast',
+                                  'Democratic Republic of Congo']
+        df['is_francophone'] = df['country_of_origin'].isin(francophone_countries)
+        results = []
+        for val in [True, False]:
+            mask = df['is_francophone'] == val
+            if mask.sum() < 5:
+                continue
+            y_true = y[mask]
+            y_pred_seg = y_pred[mask]
+            y_proba_seg = y_proba[mask]
+            prec = precision_score(y_true, y_pred_seg, zero_division=0)
+            rec = recall_score(y_true, y_pred_seg, zero_division=0)
+            f1 = f1_score(y_true, y_pred_seg, zero_division=0)
+            acc = accuracy_score(y_true, y_pred_seg)
+            results.append({
+                "groupe_linguistique": "Francophone" if val else "Non-francophone",
+                "n": int(mask.sum()),
+                "precision": round(prec, 4),
+                "recall": round(rec, 4),
+                "f1": round(f1, 4),
+                "accuracy": round(acc, 4)
+            })
+        return results
+
+@app.get("/analytics/performance-par-pays")
+def endpoint_performance_par_pays(agent: dict = Depends(verifier_identifiants)):
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
+        if df.empty:
+            return []
+        modele = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
+        preprocessor = joblib.load(os.path.join(BASE_DIR, 'preprocessor_canada.pkl'))
+        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
+                              'numero_document', 'date_naissance', 'email', 'telephone', 
+                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
+                              'phase_traitement', 'identifiant_conseiller', 'notes'], errors='ignore')
+        y = (df['visa_decision'] == 'Accepted').astype(int)
+        X_transformed = preprocessor.transform(X)
+        y_pred = modele.predict(X_transformed)
+        y_proba = modele.predict_proba(X_transformed)[:, 1]
+        results = []
+        for pays in df['country_of_origin'].unique():
+            mask = df['country_of_origin'] == pays
+            if mask.sum() < 5:
+                continue
+            y_true = y[mask]
+            y_pred_seg = y_pred[mask]
+            y_proba_seg = y_proba[mask]
+            prec = precision_score(y_true, y_pred_seg, zero_division=0)
+            rec = recall_score(y_true, y_pred_seg, zero_division=0)
+            f1 = f1_score(y_true, y_pred_seg, zero_division=0)
+            acc = accuracy_score(y_true, y_pred_seg)
+            results.append({
+                "country_of_origin": pays,
+                "n": int(mask.sum()),
+                "precision": round(prec, 4),
+                "recall": round(rec, 4),
+                "f1": round(f1, 4),
+                "accuracy": round(acc, 4)
+            })
+        results.sort(key=lambda x: x['n'], reverse=True)
+        return results[:10]
 
 # backend/main_api.py
 import os

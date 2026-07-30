@@ -417,6 +417,71 @@ def main(page: ft.Page):
                     f"Recall {float(m['recall_score'])*100:.1f}% - Specificity {float(m.get('specificity_score') or 0)*100:.1f}% - "
                     f"F1-Score {float(m['f1_score'])*100:.1f}% - ROC-AUC {float(m['roc_auc']):.4f}")
 
+        def construire_graphique_performance(donnees: list, label_axe: str, titre: str) -> ft.Column:
+            if not donnees:
+                return ft.Text("Aucune donnée disponible", size=12, color=GRIS_MOYEN)
+            import pandas as pd
+            df_display = pd.DataFrame(donnees)
+            df_display = df_display.sort_values('f1', ascending=False)
+            
+            groupes = []
+            for i, row in df_display.iterrows():
+                groupes.append(
+                    ft.BarChartGroup(
+                        x=i,
+                        bar_rods=[
+                            ft.BarChartRod(
+                                from_y=0,
+                                to_y=row['precision'] * 100,
+                                width=10,
+                                color=BLEU_GLACIER,
+                                border_radius=3,
+                                tooltip=f"Précision: {row['precision']*100:.1f}%"
+                            ),
+                            ft.BarChartRod(
+                                from_y=0,
+                                to_y=row['recall'] * 100,
+                                width=10,
+                                color=ROUGE_CANADA,
+                                border_radius=3,
+                                tooltip=f"Rappel: {row['recall']*100:.1f}%"
+                            ),
+                            ft.BarChartRod(
+                                from_y=0,
+                                to_y=row['f1'] * 100,
+                                width=10,
+                                color=OR_ERABLE,
+                                border_radius=3,
+                                tooltip=f"F1: {row['f1']*100:.1f}%"
+                            ),
+                        ]
+                    )
+                )
+            
+            legende = ft.Row([
+                ft.Row([ft.Container(width=14, height=14, bgcolor=BLEU_GLACIER, border_radius=3), ft.Text("Précision", size=11)], spacing=4),
+                ft.Row([ft.Container(width=14, height=14, bgcolor=ROUGE_CANADA, border_radius=3), ft.Text("Rappel", size=11)], spacing=4),
+                ft.Row([ft.Container(width=14, height=14, bgcolor=OR_ERABLE, border_radius=3), ft.Text("F1", size=11)], spacing=4),
+            ], spacing=16)
+            
+            labels = [row[label_axe] for _, row in df_display.iterrows()]
+            labels_display = [l[:20] + "..." if len(l) > 20 else l for l in labels]
+            
+            graphique = ft.BarChart(
+                bar_groups=groupes,
+                border=ft.border.all(1, "#E5E7EB"),
+                left_axis=ft.ChartAxis(labels_size=40),
+                bottom_axis=ft.ChartAxis(
+                    labels=[ft.ChartAxisLabel(value=i, label=ft.Text(labels_display[i], size=9, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)) for i in range(len(labels_display))],
+                    labels_size=40,
+                ),
+                horizontal_grid_lines=ft.ChartGridLines(color="#EDEEF1", width=1),
+                animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
+                height=280,
+            )
+            
+            return ft.Column([ft.Text(titre, size=13, weight=ft.FontWeight.W_600), graphique, ft.Container(height=6), legende])
+
         def construire():
             
             # CHARGEMENT DES DONNEES
@@ -428,6 +493,13 @@ def main(page: ft.Page):
             secteur_data = client_api.taux_par_secteur()
             education_data = client_api.taux_par_education()
             decision_data = client_api.repartition_decision()
+
+            # NOUVEAU : chargement des données de performance par segment
+            perf_programme = client_api.performance_par_programme()
+            perf_secteur = client_api.performance_par_secteur()
+            perf_education = client_api.performance_par_education()
+            perf_francophone = client_api.performance_par_francophone()
+            perf_pays = client_api.performance_par_pays()
 
             repartition = stats["repartition_par_programme"]
             total_dossiers = sum(item["total"] for item in repartition)
@@ -530,6 +602,36 @@ def main(page: ft.Page):
                         )
                     ]))
                 ], col={"sm": 12, "md": 6}),
+                ft.Column([ft.Container(height=20)], col=12),
+                # NOUVEAU : Graphiques de performance par segment
+                ft.Column([
+                    carte(ft.Column([
+                        ft.Row([
+                            ft.Text("Performance du modele par segment", size=15, weight=ft.FontWeight.BOLD),
+                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                        ft.Row([
+                            ft.Column([
+                                construire_graphique_performance(perf_programme, 'program', "Par programme")
+                            ], expand=True),
+                            ft.Column([
+                                construire_graphique_performance(perf_secteur, 'sector', "Par secteur")
+                            ], expand=True),
+                        ], spacing=16),
+                        ft.Row([
+                            ft.Column([
+                                construire_graphique_performance(perf_education, 'education_level', "Par niveau d'études")
+                            ], expand=True),
+                            ft.Column([
+                                construire_graphique_performance(perf_francophone, 'groupe_linguistique', "Par groupe linguistique")
+                            ], expand=True),
+                        ], spacing=16),
+                        ft.Row([
+                            ft.Column([
+                                construire_graphique_performance(perf_pays, 'country_of_origin', "Top 10 pays")
+                            ], expand=True),
+                        ], spacing=16),
+                    ]))
+                ], col=12),
                 ft.Column([ft.Container(height=20)], col=12),
                 ft.Column([
                     carte(ft.Column([

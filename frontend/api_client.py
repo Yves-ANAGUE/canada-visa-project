@@ -139,6 +139,30 @@ class ClientAPI:
             r = client.delete(f"{API_BASE_URL}/admin/agents/{identifiant_conseiller}", auth=self._auth())
             return self._traiter_reponse(r)
 
+    def performance_par_programme(self) -> list:
+        with httpx.Client(timeout=15) as client:
+            r = client.get(f"{API_BASE_URL}/analytics/performance-par-programme", auth=self._auth())
+            return self._traiter_reponse(r)
+
+    def performance_par_secteur(self) -> list:
+        with httpx.Client(timeout=15) as client:
+            r = client.get(f"{API_BASE_URL}/analytics/performance-par-secteur", auth=self._auth())
+            return self._traiter_reponse(r)
+
+    def performance_par_education(self) -> list:
+        with httpx.Client(timeout=15) as client:
+            r = client.get(f"{API_BASE_URL}/analytics/performance-par-education", auth=self._auth())
+            return self._traiter_reponse(r)
+
+    def performance_par_francophone(self) -> list:
+        with httpx.Client(timeout=15) as client:
+            r = client.get(f"{API_BASE_URL}/analytics/performance-par-francophone", auth=self._auth())
+            return self._traiter_reponse(r)
+
+    def performance_par_pays(self) -> list:
+        with httpx.Client(timeout=15) as client:
+            r = client.get(f"{API_BASE_URL}/analytics/performance-par-pays", auth=self._auth())
+            return self._traiter_reponse(r)
     
     # NOUVELLES METHODES A AJOUTER
     
