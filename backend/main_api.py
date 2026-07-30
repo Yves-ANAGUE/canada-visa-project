@@ -1217,7 +1217,7 @@ async def sante_head():
     })
 
 # ============================================================
-# ROUTES DE PERFORMANCE PAR SEGMENT (avec feature engineering)
+# ROUTES DE PERFORMANCE PAR SEGMENT (version définitive)
 # ============================================================
 
 @app.get("/analytics/performance-par-programme")
@@ -1227,15 +1227,12 @@ def endpoint_performance_par_programme(agent: dict = Depends(verifier_identifian
         df = pd.read_sql("SELECT * FROM apprentissage_canada", conn)
         if df.empty:
             return []
-        # Feature engineering
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
         preprocessor = pipeline.named_steps['preprocessor']
-        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
-                              'numero_document', 'date_naissance', 'email', 'telephone', 
-                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
-                              'phase_traitement', 'identifiant_conseiller', 'notes',
-                              'fonds_minimum_requis'], errors='ignore')
+        # Récupérer les colonnes exactes attendues par le préprocesseur
+        expected_cols = preprocessor.feature_names_in_
+        X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
         y_pred = pipeline.predict(X_transformed)
@@ -1272,11 +1269,8 @@ def endpoint_performance_par_secteur(agent: dict = Depends(verifier_identifiants
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
         preprocessor = pipeline.named_steps['preprocessor']
-        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
-                              'numero_document', 'date_naissance', 'email', 'telephone', 
-                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
-                              'phase_traitement', 'identifiant_conseiller', 'notes',
-                              'fonds_minimum_requis'], errors='ignore')
+        expected_cols = preprocessor.feature_names_in_
+        X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
         y_pred = pipeline.predict(X_transformed)
@@ -1313,11 +1307,8 @@ def endpoint_performance_par_education(agent: dict = Depends(verifier_identifian
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
         preprocessor = pipeline.named_steps['preprocessor']
-        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
-                              'numero_document', 'date_naissance', 'email', 'telephone', 
-                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
-                              'phase_traitement', 'identifiant_conseiller', 'notes',
-                              'fonds_minimum_requis'], errors='ignore')
+        expected_cols = preprocessor.feature_names_in_
+        X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
         y_pred = pipeline.predict(X_transformed)
@@ -1354,11 +1345,8 @@ def endpoint_performance_par_francophone(agent: dict = Depends(verifier_identifi
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
         preprocessor = pipeline.named_steps['preprocessor']
-        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
-                              'numero_document', 'date_naissance', 'email', 'telephone', 
-                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
-                              'phase_traitement', 'identifiant_conseiller', 'notes',
-                              'fonds_minimum_requis'], errors='ignore')
+        expected_cols = preprocessor.feature_names_in_
+        X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
         y_pred = pipeline.predict(X_transformed)
@@ -1399,11 +1387,8 @@ def endpoint_performance_par_pays(agent: dict = Depends(verifier_identifiants)):
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
         preprocessor = pipeline.named_steps['preprocessor']
-        X = df.drop(columns=['visa_decision', 'crs_score', 'id_client', 'nom', 'prenom', 
-                              'numero_document', 'date_naissance', 'email', 'telephone', 
-                              'ville_residence', 'frais_encaisses', 'restes_a_payer', 
-                              'phase_traitement', 'identifiant_conseiller', 'notes',
-                              'fonds_minimum_requis'], errors='ignore')
+        expected_cols = preprocessor.feature_names_in_
+        X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
         X_transformed = preprocessor.transform(X)
         y_pred = pipeline.predict(X_transformed)
