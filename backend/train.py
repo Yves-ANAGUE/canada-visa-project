@@ -395,48 +395,61 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     else:
         logger.info(f"❌ Modèle rejeté, ancien conservé.")
 
-    # Insertion dans historique_entrainement
+    # === INSERTION DANS L'HISTORIQUE ===
+    logger.info("Tentative d'insertion dans historique_entrainement...")
+    
+    # Vérification des données avant insertion
+    logger.info(f"meilleur contient : {meilleur.keys()}")
+    logger.info(f"modele = {meilleur.get('modele', 'inconnu')}")
+    logger.info(f"n_train = {meilleur.get('n_train', 0)}")
+    
     try:
         with engine.connect() as conn:
-            # Vérifier si la colonne specificity_score existe
-            result = conn.execute(text("""
-                SELECT column_name 
-                FROM information_schema.columns 
-                WHERE table_name = 'historique_entrainement' 
-                AND column_name = 'specificity_score'
-            """)).fetchone()
-            has_specificity = result is not None
-            if not has_specificity:
-                logger.warning("⚠️ La colonne specificity_score n'existe pas dans la table, elle sera ignorée.")
-            
-            colonnes = ['declenchement', 'accuracy', 'precision_score', 'recall_score', 'f1_score', 'roc_auc', 'modele_valide', 'nb_dossiers_train', 'modele_choisi']
-            valeurs = {
-                "d": declenchement,
-                "a": float(meilleur['accuracy']),
-                "p": float(meilleur['precision']),
-                "r": float(meilleur['recall']),
-                "f": float(meilleur['f1']),
-                "auc": float(meilleur['roc_auc']),
-                "v": valide,
-                "n": int(meilleur.get('n_train', 0)),
-                "m": meilleur.get('modele', 'inconnu')
-            }
-            if has_specificity:
-                colonnes.append('specificity_score')
-                valeurs['sp'] = float(meilleur.get('specificity', 0))
-            
-            sql = f"""
-                INSERT INTO historique_entrainement
-                ({', '.join(colonnes)})
-                VALUES ({', '.join(':' + c for c in colonnes)})
-            """
-            logger.info(f"Exécution de l'insertion : {sql}")
-            logger.info(f"Avec les valeurs : {valeurs}")
-            conn.execute(text(sql), valeurs)
-            conn.commit()
-            logger.info(f"✅ Insertion réussie (modele_valide={valide}).")
+            # On commence une transaction explicite
+            trans = conn.begin()
+            try:
+                # Vérifier que la colonne specificity_score existe
+                result = conn.execute(text("""
+                    SELECT column_name 
+                    FROM information_schema.columns 
+                    WHERE table_name = 'historique_entrainement' 
+                    AND column_name = 'specificity_score'
+                """)).fetchone()
+                has_specificity = result is not None
+                
+                colonnes = ['declenchement', 'accuracy', 'precision_score', 'recall_score', 'f1_score', 'roc_auc', 'modele_valide', 'nb_dossiers_train', 'modele_choisi']
+                valeurs = {
+                    "d": declenchement,
+                    "a": float(meilleur['accuracy']),
+                    "p": float(meilleur['precision']),
+                    "r": float(meilleur['recall']),
+                    "f": float(meilleur['f1']),
+                    "auc": float(meilleur['roc_auc']),
+                    "v": valide,
+                    "n": int(meilleur.get('n_train', 0)),
+                    "m": str(meilleur.get('modele', 'inconnu'))  # Forcé en string
+                }
+                if has_specificity:
+                    colonnes.append('specificity_score')
+                    valeurs['sp'] = float(meilleur.get('specificity', 0))
+                
+                sql = f"""
+                    INSERT INTO historique_entrainement
+                    ({', '.join(colonnes)})
+                    VALUES ({', '.join(':' + c for c in colonnes)})
+                """
+                logger.info(f"SQL : {sql}")
+                logger.info(f"Valeurs : {valeurs}")
+                
+                conn.execute(text(sql), valeurs)
+                trans.commit()
+                logger.info(f"✅ Insertion réussie (modele_valide={valide}).")
+            except Exception as e:
+                trans.rollback()
+                logger.error(f"Erreur lors de l'insertion (transaction rollback) : {e}")
+                raise
     except Exception as e:
-        logger.error(f"❌ ERREUR lors de l'insertion : {e}", exc_info=True)
+        logger.error(f"❌ ERREUR fatale lors de l'insertion : {e}", exc_info=True)
         raise  # Propage l'erreur pour que le workflow échoue
 
     engine.dispose()
