@@ -43,10 +43,10 @@ USE_GITHUB_ACTIONS = os.environ.get('USE_GITHUB_ACTIONS', 'false').lower() == 't
 GITHUB_REPO = os.environ.get('GITHUB_REPO', 'Yves-ANAGUE/canada-visa-project')
 GITHUB_PAT = os.environ.get('GITHUB_PAT', '')
 
-# ============================================================
+
 # FONCTION DE FEATURE ENGINEERING POUR DATAFRAME COMPLET
 # (reproduit exactement les transformations du notebook)
-# ============================================================
+
 
 def ajouter_features_derivees(df: pd.DataFrame) -> pd.DataFrame:
     """
@@ -188,9 +188,9 @@ def verifier_identifiants(credentials: HTTPBasicCredentials = Depends(security))
 
     return {"identifiant_conseiller": resultat.identifiant_conseiller, "nom_agent": resultat.nom_agent}
 
-# ============================================================
+
 # SCHEMAS PYDANTIC
-# ============================================================
+
 
 from pydantic import field_validator
 
@@ -302,9 +302,9 @@ class DossierPartiel(BaseModel):
             return None
         return valeur
 
-# ============================================================
+
 # ROUTES
-# ============================================================
+
 
 @app.post("/predire")
 def endpoint_predire(profil: ProfilCandidat, agent: dict = Depends(verifier_identifiants)):
@@ -693,9 +693,9 @@ def endpoint_diagnostic_complet(id_client: str, agent: dict = Depends(verifier_i
     return {"resultat": resultat, "diagnostic_ia": diagnostic, "scenarios": scenarios,
             "erreur_simulation": erreur_simulation, "dossier": dossier}
 
-# ============================================================
+
 # PDF ET EMAIL
-# ============================================================
+
 
 @app.get("/dossiers/{id_client}/pdf")
 def endpoint_telecharger_pdf(id_client: str, agent: dict = Depends(verifier_identifiants)):
@@ -1218,9 +1218,9 @@ async def sante_head():
         "X-Status": "ok"
     })
 
-# ============================================================
+
 # ROUTES DE PERFORMANCE PAR SEGMENT (version pipeline complet)
-# ============================================================
+
 
 @app.get("/analytics/performance-par-programme")
 def endpoint_performance_par_programme(agent: dict = Depends(verifier_identifiants)):

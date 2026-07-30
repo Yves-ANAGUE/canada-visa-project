@@ -459,28 +459,30 @@ def main(page: ft.Page):
                 )
             
             legende = ft.Row([
-                ft.Row([ft.Container(width=14, height=14, bgcolor=BLEU_GLACIER, border_radius=3), ft.Text("Précision", size=11)], spacing=4),
-                ft.Row([ft.Container(width=14, height=14, bgcolor=ROUGE_CANADA, border_radius=3), ft.Text("Rappel", size=11)], spacing=4),
-                ft.Row([ft.Container(width=14, height=14, bgcolor=OR_ERABLE, border_radius=3), ft.Text("F1", size=11)], spacing=4),
-            ], spacing=16)
+                ft.Row([ft.Container(width=14, height=14, bgcolor=BLEU_GLACIER, border_radius=3), ft.Text("Précision", size=12, weight=ft.FontWeight.W_500)], spacing=6),
+                ft.Row([ft.Container(width=14, height=14, bgcolor=ROUGE_CANADA, border_radius=3), ft.Text("Rappel", size=12, weight=ft.FontWeight.W_500)], spacing=6),
+                ft.Row([ft.Container(width=14, height=14, bgcolor=OR_ERABLE, border_radius=3), ft.Text("F1", size=12, weight=ft.FontWeight.W_500)], spacing=6),
+            ], spacing=20)
             
             labels = [row[label_axe] for _, row in df_display.iterrows()]
-            labels_display = [l[:20] + "..." if len(l) > 20 else l for l in labels]
+            # Troncature et rotation
+            labels_display = [l[:15] + "..." if len(l) > 15 else l for l in labels]
             
             graphique = ft.BarChart(
                 bar_groups=groupes,
                 border=ft.border.all(1, "#E5E7EB"),
                 left_axis=ft.ChartAxis(labels_size=40),
                 bottom_axis=ft.ChartAxis(
-                    labels=[ft.ChartAxisLabel(value=i, label=ft.Text(labels_display[i], size=9, max_lines=1, overflow=ft.TextOverflow.ELLIPSIS)) for i in range(len(labels_display))],
-                    labels_size=40,
+                    labels=[ft.ChartAxisLabel(value=i, label=ft.Text(labels_display[i], size=9, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)) for i in range(len(labels_display))],
+                    labels_size=60,  # Augmenté pour laisser de la place
+                    title=ft.Text(label_axe.capitalize(), size=10, weight=ft.FontWeight.W_600)
                 ),
                 horizontal_grid_lines=ft.ChartGridLines(color="#EDEEF1", width=1),
                 animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-                height=280,
+                height=300,  # Légèrement plus haut
             )
             
-            return ft.Column([ft.Text(titre, size=13, weight=ft.FontWeight.W_600), graphique, ft.Container(height=6), legende])
+            return ft.Column([ft.Text(titre, size=13, weight=ft.FontWeight.W_600), graphique, ft.Container(height=8), legende])
 
         def construire():
             
@@ -2468,9 +2470,9 @@ def main_avec_diagnostic(page: ft.Page):
         print("=" * 60)
 
 
-# ============================================================
+
 # POUR RENDER - Lancement de l'application Flet
-# ============================================================
+
 
 if __name__ == "__main__":
     import os

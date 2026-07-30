@@ -41,9 +41,9 @@ ENTREPRISE = {
     "mission": "Vous accompagner avec transparence et expertise a chaque etape de votre projet d'immigration.",
 }
 
-# ============================================================
+
 # CORRECTION : URL de l'API pour Vercel
-# ============================================================
+
 
 # frontend/theme.py
 import os

@@ -383,34 +383,55 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
                     f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})")
         logger.info(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
                     f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
-        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
+        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'ACCEPTÉ' if valide else 'REJETÉ'}")
     
     if valide:
         joblib.dump(pipeline, 'modele_canada.pkl')
         joblib.dump(seuil_decision, 'seuil_decision.pkl')
         joblib.dump(pipeline.named_steps['preprocessor'], 'preprocessor_canada.pkl')
-        logger.info(f"✅ Nouveau modèle et préprocesseur sauvegardés.")
+        logger.info(f"Nouveau modèle et préprocesseur sauvegardés.")
     else:
-        logger.info(f"❌ Modèle rejeté.")
+        logger.info(f"Modèle rejeté, ancien conservé.")
 
-    with engine.connect() as conn:
-        conn.execute(text("""
-            INSERT INTO historique_entrainement
-                (declenchement, accuracy, precision_score, recall_score, specificity_score, f1_score, roc_auc, modele_valide, nb_dossiers_train, modele_choisi)
-            VALUES (:d, :a, :p, :r, :sp, :f, :auc, :v, :n, :m)
-        """), {
-            "d": declenchement,
-            "a": float(meilleur['accuracy']),
-            "p": float(meilleur['precision']),
-            "r": float(meilleur['recall']),
-            "sp": float(meilleur.get('specificity', 0)),
-            "f": float(meilleur['f1']),
-            "auc": float(meilleur['roc_auc']),
-            "v": valide,
-            "n": int(meilleur.get('n_train', 0)),
-            "m": meilleur.get('modele', 'inconnu')
-        })
-        conn.commit()
+    # Insertion dans historique_entrainement avec vérification de la colonne specificity_score
+    try:
+        with engine.connect() as conn:
+            # Vérifier si la colonne specificity_score existe
+            try:
+                conn.execute(text("SELECT specificity_score FROM historique_entrainement LIMIT 0")).fetchall()
+                has_specificity = True
+            except Exception:
+                has_specificity = False
+                logger.warning("La colonne specificity_score n'existe pas dans la table, elle sera ignorée.")
+            
+            colonnes = ['declenchement', 'accuracy', 'precision_score', 'recall_score', 'f1_score', 'roc_auc', 'modele_valide', 'nb_dossiers_train', 'modele_choisi']
+            valeurs = {
+                "d": declenchement,
+                "a": float(meilleur['accuracy']),
+                "p": float(meilleur['precision']),
+                "r": float(meilleur['recall']),
+                "f": float(meilleur['f1']),
+                "auc": float(meilleur['roc_auc']),
+                "v": valide,
+                "n": int(meilleur.get('n_train', 0)),
+                "m": meilleur.get('modele', 'inconnu')
+            }
+            if has_specificity:
+                colonnes.append('specificity_score')
+                valeurs['sp'] = float(meilleur.get('specificity', 0))
+            
+            sql = f"""
+                INSERT INTO historique_entrainement
+                ({', '.join(colonnes)})
+                VALUES ({', '.join(':' + c for c in colonnes)})
+            """
+            conn.execute(text(sql), valeurs)
+            conn.commit()
+            logger.info(f"Insertion dans historique_entrainement réussie (modele_valide={valide}).")
+    except Exception as e:
+        logger.error(f"ERREUR lors de l'insertion dans historique_entrainement : {e}", exc_info=True)
+        raise  # Propage l'erreur pour faire échouer le workflow
+
     engine.dispose()
     return valide
 
