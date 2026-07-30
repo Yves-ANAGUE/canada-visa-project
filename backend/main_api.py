@@ -1219,7 +1219,7 @@ async def sante_head():
     })
 
 # ============================================================
-# ROUTES DE PERFORMANCE PAR SEGMENT (version finale)
+# ROUTES DE PERFORMANCE PAR SEGMENT (version pipeline complet)
 # ============================================================
 
 @app.get("/analytics/performance-par-programme")
@@ -1231,14 +1231,14 @@ def endpoint_performance_par_programme(agent: dict = Depends(verifier_identifian
             return []
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = pipeline.named_steps['preprocessor']
-        # Récupérer les colonnes attendues par le préprocesseur
-        expected_cols = preprocessor.feature_names_in_
+        # On sélectionne les colonnes nécessaires pour le pipeline (celles utilisées lors de l'entraînement)
+        # On utilise .feature_names_in_ pour obtenir les colonnes attendues par le pipeline
+        expected_cols = list(pipeline.feature_names_in_)
         X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
-        X_transformed = preprocessor.transform(X)
-        y_pred = pipeline.predict(X_transformed)
-        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
+        # Le pipeline fait la transformation interne
+        y_pred = pipeline.predict(X)
+        y_proba = pipeline.predict_proba(X)[:, 1]
         results = []
         for prog in df['program'].unique():
             mask = df['program'] == prog
@@ -1270,13 +1270,11 @@ def endpoint_performance_par_secteur(agent: dict = Depends(verifier_identifiants
             return []
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = pipeline.named_steps['preprocessor']
-        expected_cols = preprocessor.feature_names_in_
+        expected_cols = list(pipeline.feature_names_in_)
         X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
-        X_transformed = preprocessor.transform(X)
-        y_pred = pipeline.predict(X_transformed)
-        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X)
+        y_proba = pipeline.predict_proba(X)[:, 1]
         results = []
         for secteur in df['sector'].unique():
             mask = df['sector'] == secteur
@@ -1308,13 +1306,11 @@ def endpoint_performance_par_education(agent: dict = Depends(verifier_identifian
             return []
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = pipeline.named_steps['preprocessor']
-        expected_cols = preprocessor.feature_names_in_
+        expected_cols = list(pipeline.feature_names_in_)
         X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
-        X_transformed = preprocessor.transform(X)
-        y_pred = pipeline.predict(X_transformed)
-        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X)
+        y_proba = pipeline.predict_proba(X)[:, 1]
         results = []
         for edu in df['education_level'].unique():
             mask = df['education_level'] == edu
@@ -1346,13 +1342,11 @@ def endpoint_performance_par_francophone(agent: dict = Depends(verifier_identifi
             return []
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = pipeline.named_steps['preprocessor']
-        expected_cols = preprocessor.feature_names_in_
+        expected_cols = list(pipeline.feature_names_in_)
         X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
-        X_transformed = preprocessor.transform(X)
-        y_pred = pipeline.predict(X_transformed)
-        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X)
+        y_proba = pipeline.predict_proba(X)[:, 1]
         francophone_countries = ['France','Morocco','Algeria','Tunisia','Senegal',
                                   'Cameroon','Lebanon','Haiti','Ivory Coast',
                                   'Democratic Republic of Congo']
@@ -1388,13 +1382,11 @@ def endpoint_performance_par_pays(agent: dict = Depends(verifier_identifiants)):
             return []
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
-        preprocessor = pipeline.named_steps['preprocessor']
-        expected_cols = preprocessor.feature_names_in_
+        expected_cols = list(pipeline.feature_names_in_)
         X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
-        X_transformed = preprocessor.transform(X)
-        y_pred = pipeline.predict(X_transformed)
-        y_proba = pipeline.predict_proba(X_transformed)[:, 1]
+        y_pred = pipeline.predict(X)
+        y_proba = pipeline.predict_proba(X)[:, 1]
         results = []
         for pays in df['country_of_origin'].unique():
             mask = df['country_of_origin'] == pays
