@@ -349,57 +349,61 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
     with engine.connect() as conn:
-        # On récupère tout l'enregistrement de l'ancien meilleur modèle
         ancien = conn.execute(text("""
-            SELECT * FROM historique_entrainement 
+            SELECT precision_score FROM historique_entrainement 
             WHERE modele_valide = TRUE 
             ORDER BY precision_score DESC 
             LIMIT 1
         """)).fetchone()
+        ancienne_precision = ancien[0] if ancien else 0
     
-    if ancien is None:
-        valide = True
-        logger.info("Premier modèle : sauvegarde automatique.")
+    # Calcul des améliorations (multi-métriques)
+    nouvelle_precision = meilleur['precision']
+    nouveau_recall = meilleur['recall']
+    nouveau_f1 = meilleur['f1']
+    nouveau_roc_auc = meilleur['roc_auc']
+    
+    # On récupère les métriques de l'ancien modèle (si existant)
+    if ancien is not None:
+        with engine.connect() as conn:
+            ancien_metrics = conn.execute(text("""
+                SELECT recall_score, f1_score, roc_auc 
+                FROM historique_entrainement 
+                WHERE modele_valide = TRUE 
+                ORDER BY precision_score DESC 
+                LIMIT 1
+            """)).fetchone()
+            ancien_recall, ancien_f1, ancien_roc_auc = ancien_metrics if ancien_metrics else (0,0,0)
     else:
-        # On extrait les valeurs par nom de colonne
-        ancien_dict = dict(ancien._mapping)
-        ancienne_precision = ancien_dict.get('precision_score', 0)
-        ancien_recall = ancien_dict.get('recall_score', 0)
-        ancien_f1 = ancien_dict.get('f1_score', 0)
-        ancien_roc_auc = ancien_dict.get('roc_auc', 0)
-        
-        nouvelle_precision = meilleur['precision']
-        nouveau_recall = meilleur['recall']
-        nouveau_f1 = meilleur['f1']
-        nouveau_roc_auc = meilleur['roc_auc']
-        
-        nb_ameliorations = 0
-        if nouvelle_precision > ancienne_precision * 0.98:
-            nb_ameliorations += 1
-        if nouveau_recall > ancien_recall * 0.98:
-            nb_ameliorations += 1
-        if nouveau_f1 > ancien_f1 * 0.98:
-            nb_ameliorations += 1
-        if nouveau_roc_auc > ancien_roc_auc * 0.98:
-            nb_ameliorations += 1
-        
-        valide = nb_ameliorations >= 2
-        
-        logger.info(f"Comparaison avec ancien modèle (Précision {ancienne_precision:.3f} / "
-                    f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})")
-        logger.info(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
-                    f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
-        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
+        ancien_recall = ancien_f1 = ancien_roc_auc = 0
+    
+    nb_ameliorations = 0
+    if nouvelle_precision > ancienne_precision * 0.98:
+        nb_ameliorations += 1
+    if nouveau_recall > ancien_recall * 0.98:
+        nb_ameliorations += 1
+    if nouveau_f1 > ancien_f1 * 0.98:
+        nb_ameliorations += 1
+    if nouveau_roc_auc > ancien_roc_auc * 0.98:
+        nb_ameliorations += 1
+    
+    valide = nb_ameliorations >= 2
+    
+    logger.info(f"Comparaison avec ancien modèle (Précision {ancienne_precision:.3f} / "
+                f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})")
+    logger.info(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
+                f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
+    logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
     
     if valide:
         joblib.dump(pipeline, 'modele_canada.pkl')
         joblib.dump(seuil_decision, 'seuil_decision.pkl')
-        joblib.dump(pipeline.named_steps['preprocessor'], 'preprocessor_canada.pkl')
-        logger.info(f"✅ Nouveau modèle et préprocesseur sauvegardés.")
+        # On ne sauvegarde PAS le préprocesseur séparément ici
+        logger.info(f"✅ Nouveau modèle sauvegardé.")
     else:
         logger.info(f"❌ Modèle rejeté, ancien conservé.")
 
-    # === INSERTION : EXACTEMENT COMME DANS L'ANCIEN CODE (rien ne change) ===
+    # === INSERTION (identique à l'ancien code) ===
     with engine.connect() as conn:
         conn.execute(text("""
             INSERT INTO historique_entrainement
