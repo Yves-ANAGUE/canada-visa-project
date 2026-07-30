@@ -1219,7 +1219,7 @@ async def sante_head():
     })
 
 # ============================================================
-# ROUTES DE PERFORMANCE PAR SEGMENT (version définitive)
+# ROUTES DE PERFORMANCE PAR SEGMENT (version finale)
 # ============================================================
 
 @app.get("/analytics/performance-par-programme")
@@ -1232,7 +1232,7 @@ def endpoint_performance_par_programme(agent: dict = Depends(verifier_identifian
         df = ajouter_features_derivees(df)
         pipeline = joblib.load(os.path.join(BASE_DIR, 'modele_canada.pkl'))
         preprocessor = pipeline.named_steps['preprocessor']
-        # Récupérer les colonnes exactes attendues par le préprocesseur
+        # Récupérer les colonnes attendues par le préprocesseur
         expected_cols = preprocessor.feature_names_in_
         X = df[expected_cols]
         y = (df['visa_decision'] == 'Accepted').astype(int)
