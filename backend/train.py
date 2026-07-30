@@ -346,6 +346,8 @@ def _convertir_en_python(valeur):
     return valeur
 
 def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, declenchement='planifie'):
+    import logging
+    logger = logging.getLogger('train_canada')
     engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=280)
     
     with engine.connect() as conn:
@@ -383,26 +385,29 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
                     f"Recall {ancien_recall:.3f} / F1 {ancien_f1:.3f} / ROC-AUC {ancien_roc_auc:.3f})")
         logger.info(f"Nouveau modèle : Précision {nouvelle_precision:.3f} / "
                     f"Recall {nouveau_recall:.3f} / F1 {nouveau_f1:.3f} / ROC-AUC {nouveau_roc_auc:.3f}")
-        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'ACCEPTÉ' if valide else 'REJETÉ'}")
+        logger.info(f"Améliorations sur 4 métriques : {nb_ameliorations}/4 → {'✅ ACCEPTÉ' if valide else '❌ REJETÉ'}")
     
     if valide:
         joblib.dump(pipeline, 'modele_canada.pkl')
         joblib.dump(seuil_decision, 'seuil_decision.pkl')
         joblib.dump(pipeline.named_steps['preprocessor'], 'preprocessor_canada.pkl')
-        logger.info(f"Nouveau modèle et préprocesseur sauvegardés.")
+        logger.info(f"✅ Nouveau modèle et préprocesseur sauvegardés.")
     else:
-        logger.info(f"Modèle rejeté, ancien conservé.")
+        logger.info(f"❌ Modèle rejeté, ancien conservé.")
 
-    # Insertion dans historique_entrainement avec vérification de la colonne specificity_score
+    # Insertion dans historique_entrainement
     try:
         with engine.connect() as conn:
             # Vérifier si la colonne specificity_score existe
-            try:
-                conn.execute(text("SELECT specificity_score FROM historique_entrainement LIMIT 0")).fetchall()
-                has_specificity = True
-            except Exception:
-                has_specificity = False
-                logger.warning("La colonne specificity_score n'existe pas dans la table, elle sera ignorée.")
+            result = conn.execute(text("""
+                SELECT column_name 
+                FROM information_schema.columns 
+                WHERE table_name = 'historique_entrainement' 
+                AND column_name = 'specificity_score'
+            """)).fetchone()
+            has_specificity = result is not None
+            if not has_specificity:
+                logger.warning("⚠️ La colonne specificity_score n'existe pas dans la table, elle sera ignorée.")
             
             colonnes = ['declenchement', 'accuracy', 'precision_score', 'recall_score', 'f1_score', 'roc_auc', 'modele_valide', 'nb_dossiers_train', 'modele_choisi']
             valeurs = {
@@ -425,12 +430,14 @@ def sauvegarder_si_qualite_suffisante(pipeline, meilleur, seuil_decision=0.5, de
                 ({', '.join(colonnes)})
                 VALUES ({', '.join(':' + c for c in colonnes)})
             """
+            logger.info(f"Exécution de l'insertion : {sql}")
+            logger.info(f"Avec les valeurs : {valeurs}")
             conn.execute(text(sql), valeurs)
             conn.commit()
-            logger.info(f"Insertion dans historique_entrainement réussie (modele_valide={valide}).")
+            logger.info(f"✅ Insertion réussie (modele_valide={valide}).")
     except Exception as e:
-        logger.error(f"ERREUR lors de l'insertion dans historique_entrainement : {e}", exc_info=True)
-        raise  # Propage l'erreur pour faire échouer le workflow
+        logger.error(f"❌ ERREUR lors de l'insertion : {e}", exc_info=True)
+        raise  # Propage l'erreur pour que le workflow échoue
 
     engine.dispose()
     return valide
