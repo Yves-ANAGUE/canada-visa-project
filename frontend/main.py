@@ -2068,7 +2068,7 @@ def main(page: ft.Page):
                         except Exception:
                             top_features = ["Non disponibles"]
 
-                        # Récupérer le meilleur modèle
+                        # Récupérer le meilleur modèle (celui actuellement en production)
                         meilleur_modele = None
                         try:
                             metriques = client_api.metriques_modele()
@@ -2086,8 +2086,35 @@ def main(page: ft.Page):
                             pass
 
                         for h in historique:
-                            # Déterminer le statut
-                            if h.get("modele_valide", False):
+                            # Récupérer les métriques de la ligne
+                            precision_actuelle = h.get('precision_score', 0)
+                            recall_actuel = h.get('recall_score', 0)
+                            f1_actuel = h.get('f1_score', 0)
+                            roc_auc_actuel = h.get('roc_auc', 0)
+                            
+                            # Calculer le nombre de métriques améliorées par rapport au meilleur modèle
+                            if meilleur_modele:
+                                meilleur_precision = meilleur_modele['precision']
+                                meilleur_recall = meilleur_modele['recall']
+                                meilleur_f1 = meilleur_modele['f1']
+                                meilleur_roc_auc = meilleur_modele['roc_auc']
+                                
+                                nb_ameliorations = 0
+                                if precision_actuelle >= meilleur_precision * 0.995:
+                                    nb_ameliorations += 1
+                                if recall_actuel >= meilleur_recall * 0.995:
+                                    nb_ameliorations += 1
+                                if f1_actuel >= meilleur_f1 * 0.995:
+                                    nb_ameliorations += 1
+                                if roc_auc_actuel >= meilleur_roc_auc * 0.995:
+                                    nb_ameliorations += 1
+                            else:
+                                nb_ameliorations = 0
+
+                            # Déterminer le statut (ACCEPTE / REJETE) selon la règle 4/4
+                            est_valide = h.get("modele_valide", False)
+                            
+                            if est_valide:
                                 badge_statut = ft.Container(
                                     content=ft.Text("ACCEPTE", color="#FFFFFF", size=10, weight=ft.FontWeight.BOLD),
                                     bgcolor=VERT_SUCCES,
@@ -2097,6 +2124,7 @@ def main(page: ft.Page):
                                 couleur_statut = VERT_SUCCES
                                 couleur_fond = "#F0FDF4"
                                 bordure = "#D1FAE5"
+                                message_statut = f"Modèle ACCEPTÉ ({nb_ameliorations}/4 métriques améliorées)"
                             else:
                                 badge_statut = ft.Container(
                                     content=ft.Text("REJETE", color="#FFFFFF", size=10, weight=ft.FontWeight.BOLD),
@@ -2107,28 +2135,18 @@ def main(page: ft.Page):
                                 couleur_statut = ORANGE_ALERTE
                                 couleur_fond = "#FFF7ED"
                                 bordure = "#FDE68A"
+                                if meilleur_modele:
+                                    message_statut = f"Modèle REJETÉ ({nb_ameliorations}/4 métriques améliorées, seuil = 4/4)"
+                                else:
+                                    message_statut = f"Modèle REJETÉ (aucun modèle de référence)"
 
                             precision_actuelle = h.get('precision_score', 0)
-                            
-                            # CORRECTION : Récupérer nb_dossiers_train correctement
-                            
                             nb_dossiers = h.get('nb_dossiers_train', 0)
                             modele_choisi = h.get('modele_choisi', 'inconnu')
-                            
-                            if h.get("modele_valide", False):
-                                message_statut = f"Modele ACCEPTE avec Precision {precision_actuelle*100:.1f}%"
-                            else:
-                                if meilleur_modele:
-                                    message_statut = (
-                                        f"Modele REJETE : Precision {precision_actuelle*100:.1f}% "
-                                        f"(ancien meilleur : {meilleur_modele['precision']*100:.1f}%)"
-                                    )
-                                else:
-                                    message_statut = f"Modele REJETE : Precision {precision_actuelle*100:.1f}%"
 
                             # Métriques de l'ancien modèle conservé
                             metriques_ancien = None
-                            if meilleur_modele and not h.get("modele_valide", False):
+                            if meilleur_modele and not est_valide:
                                 metriques_ancien = ft.Container(
                                     content=ft.Column([
                                         ft.Text("Ancien modele conserve :", size=11, color=GRIS_TEXTE, weight=ft.FontWeight.W_600),
@@ -2165,9 +2183,6 @@ def main(page: ft.Page):
                                                     size=9,
                                                     color=GRIS_MOYEN,
                                                 ),
-                                                
-                                                # AJOUT : Modele choisi et nombre de dossiers
-                                                
                                                 ft.Row([
                                                     ft.Text(
                                                         f"Modele : {modele_choisi}",
@@ -2188,10 +2203,18 @@ def main(page: ft.Page):
                                         ]),
                                         ft.Row([
                                             ft.Text(f"Accuracy: {h.get('accuracy', 0)*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
-                                            ft.Text(f"Precision: {h.get('precision_score', 0)*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
-                                            ft.Text(f"Recall: {h.get('recall_score', 0)*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
-                                            ft.Text(f"F1: {h.get('f1_score', 0)*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
-                                            ft.Text(f"ROC-AUC: {h.get('roc_auc', 0):.4f}", size=10, weight=ft.FontWeight.W_500),
+                                            ft.Text(f"Precision: {precision_actuelle*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
+                                            ft.Text(f"Recall: {recall_actuel*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
+                                            ft.Text(f"F1: {f1_actuel*100:.1f}%", size=10, weight=ft.FontWeight.W_500),
+                                            ft.Text(f"ROC-AUC: {roc_auc_actuel:.4f}", size=10, weight=ft.FontWeight.W_500),
+                                        ], wrap=True, spacing=6),
+                                        # Ligne d'améliorations
+                                        ft.Row([
+                                            ft.Text(f"Améliorations : {nb_ameliorations}/4", size=10, weight=ft.FontWeight.W_600),
+                                            ft.Text(f"Precision: {precision_actuelle*100:.1f}% (vs {meilleur_precision*100:.1f}%)", size=9, color=GRIS_MOYEN),
+                                            ft.Text(f"Recall: {recall_actuel*100:.1f}% (vs {meilleur_recall*100:.1f}%)", size=9, color=GRIS_MOYEN),
+                                            ft.Text(f"F1: {f1_actuel*100:.1f}% (vs {meilleur_f1*100:.1f}%)", size=9, color=GRIS_MOYEN),
+                                            ft.Text(f"ROC-AUC: {roc_auc_actuel:.3f} (vs {meilleur_roc_auc:.3f})", size=9, color=GRIS_MOYEN),
                                         ], wrap=True, spacing=6),
                                         ft.Text(
                                             message_statut,
