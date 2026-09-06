@@ -1726,7 +1726,6 @@ def main(page: ft.Page):
                                 page.snack_bar.open = True
                                 page.update()
                             else:
-                                # Fallback : recharger la zone des résultats
                                 print(f"Contrôles non trouvés pour {id_client}")
                         except Exception as e:
                             print(f"Erreur mise à jour diagnostic: {e}")
@@ -1745,8 +1744,10 @@ def main(page: ft.Page):
 
             def forcer_rafraichir_diagnostic(id_client: str):
                 def handler(e):
-                    # Désactiver le bouton pendant la récupération
+                    # Récupérer le bouton
                     bouton_rafraichir = e.control
+                    
+                    # Désactiver le bouton pendant la récupération
                     bouton_rafraichir.disabled = True
                     bouton_rafraichir.icon = ft.icons.HOURGLASS_TOP
                     page.update()
@@ -1754,13 +1755,38 @@ def main(page: ft.Page):
                     try:
                         notification(page, "Régénération du diagnostic en cours...", succes=True)
                         
-                        # Appeler l'API pour régénérer (stocke en base)
+                        # Vérifier d'abord si un diagnostic existe déjà en base
+                        status = client_api.get_diagnostic_status(id_client)
+                        
+                        # Si un diagnostic valide existe déjà, on le réutilise
+                        if status.get("disponible") and status.get("diagnostic"):
+                            diagnostic_existant = status["diagnostic"]
+                            # Vérifier que ce n'est pas un message d'erreur
+                            if not any(mot in diagnostic_existant for mot in ["indisponible", "Erreur", "manquante"]):
+                                # Mettre à jour l'affichage
+                                if id_client in controles_diagnostic:
+                                    texte_diag = controles_diagnostic[id_client]["texte"]
+                                    icone_diag = controles_diagnostic[id_client]["icone"]
+                                    texte_diag.value = diagnostic_existant
+                                    texte_diag.color = GRIS_TEXTE
+                                    icone_diag.icon = ft.icons.CHECK_CIRCLE
+                                    icone_diag.color = VERT_SUCCES
+                                    page.update()
+                                    notification(page, "✅ Diagnostic récupéré !", succes=True)
+                                    
+                                    # Réactiver le bouton
+                                    bouton_rafraichir.disabled = False
+                                    bouton_rafraichir.icon = ft.icons.REFRESH
+                                    page.update()
+                                    return
+                        
+                        # Sinon, appeler l'API pour régénérer (force=True)
                         reponse = client_api.regenerer_diagnostic(id_client)
                         
                         # La réponse contient directement le nouveau diagnostic
                         nouveau_diagnostic = reponse.get("diagnostic_ia")
                         
-                        if nouveau_diagnostic and nouveau_diagnostic != "Diagnostic non disponible.":
+                        if nouveau_diagnostic and nouveau_diagnostic != "" and not any(mot in nouveau_diagnostic for mot in ["indisponible", "Erreur", "manquante"]):
                             # Mettre à jour l'affichage
                             if id_client in controles_diagnostic:
                                 texte_diag = controles_diagnostic[id_client]["texte"]
@@ -1782,7 +1808,7 @@ def main(page: ft.Page):
                     except Exception as err:
                         notification(page, f"Erreur : {err}", succes=False)
                     finally:
-                        # Réactiver le bouton
+                        # Réactiver le bouton (toujours)
                         bouton_rafraichir.disabled = False
                         bouton_rafraichir.icon = ft.icons.REFRESH
                         page.update()
@@ -1873,6 +1899,15 @@ def main(page: ft.Page):
                         }
                         diagnostics_en_cours.add(id_client)
                     
+                    # ✅ BOUTON TOUJOURS ACTIF (disabled=False)
+                    bouton_rafraichir = ft.IconButton(
+                        icon=ft.icons.REFRESH,
+                        icon_size=18,
+                        tooltip="Rafraîchir/régénérer le diagnostic",
+                        on_click=forcer_rafraichir_diagnostic(id_client),
+                        disabled=False  # ← TOUJOURS ACTIF
+                    )
+                    
                     zone.controls = [
                         carte(ft.Column(blocs)),
                         ft.Container(height=16),
@@ -1881,13 +1916,7 @@ def main(page: ft.Page):
                                 ft.Row([
                                     icone_diagnostic,
                                     ft.Text("Diagnostic Data Analyst (IA)", size=15, weight=ft.FontWeight.BOLD, expand=True),
-                                    ft.IconButton(
-                                        icon=ft.icons.REFRESH,
-                                        icon_size=18,
-                                        tooltip="Rafraîchir le diagnostic",
-                                        on_click=forcer_rafraichir_diagnostic(id_client),
-                                        disabled=not diagnostic_en_cours
-                                    ),
+                                    bouton_rafraichir,  # ← BOUTON TOUJOURS ACTIF
                                 ], spacing=8),
                                 texte_diagnostic,
                             ])
