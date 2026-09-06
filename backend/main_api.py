@@ -1426,6 +1426,97 @@ def endpoint_performance_par_pays(agent: dict = Depends(verifier_identifiants)):
 import os
 
 
+@app.post("/dossiers/{id_client}/simuler-async")
+def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identifiants)):
+    """
+    Simulation RAPIDE qui retourne les résultats SANS attendre le diagnostic IA.
+    Le diagnostic IA est généré en arrière-plan (non bloquant).
+    """
+    # Récupérer le dossier
+    dossier = obtenir_dossier(id_client, agent={"identifiant_conseiller": "system"})
+    profil = nettoyer_decimals({c: dossier.get(c) for c in COLONNES_BRUTES_ATTENDUES})
+    est_archive = dossier.get("archive", False)
+    table = "apprentissage_canada" if est_archive else "predictions_canada"
+    
+    # 1. Prédiction rapide (ML uniquement)
+    resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
+    
+    # 2. Simulation des scénarios (rapide, uniquement ML)
+    try:
+        simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
+        scenarios = simulation['scenarios_ameliorations'][:5]  # Limité à 5
+    except Exception as e:
+        logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
+        scenarios = []
+    
+    # 3. Diagnostic IA temporaire (message de chargement)
+    diagnostic_temp = "🤖 Génération du diagnostic IA en cours... Les résultats détaillés seront disponibles dans quelques secondes."
+    
+    # 4. Lancer la génération du diagnostic IA en arrière-plan (non bloquant)
+    def generer_diagnostic_en_arriere_plan():
+        try:
+            # Récupérer les top features
+            top_df = etat_application.get('feature_importance')
+            
+            # Générer le vrai diagnostic
+            diagnostic_complet = generer_diagnostic_openrouter(
+                profil,
+                resultat,
+                top_df,
+                scenarios=scenarios,
+                est_archive=est_archive,
+                decision_reelle=dossier.get('visa_decision') if est_archive else None
+            )
+            
+            # Stocker en base
+            engine = etat_application['engine']
+            with engine.connect() as conn:
+                conn.execute(text(
+                    f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
+                ), {"diag": diagnostic_complet, "id": id_client})
+                conn.commit()
+            logger.info(f"Diagnostic IA généré en arrière-plan pour {id_client}")
+            
+        except Exception as e:
+            logger.error(f"Erreur diagnostic IA en arrière-plan {id_client} : {e}", exc_info=True)
+    
+    # Démarrer le thread
+    import threading
+    thread = threading.Thread(target=generer_diagnostic_en_arriere_plan, daemon=True)
+    thread.start()
+    
+    # Retourner immédiatement (sans attendre le diagnostic IA)
+    return {
+        "diagnostic_ia": diagnostic_temp,
+        "diagnostic_en_cours": True,  # Indique que le diagnostic est en cours
+        "resultat": resultat,
+        "scenarios": scenarios,
+        "dossier": dossier
+    }
+
+
+@app.get("/dossiers/{id_client}/diagnostic-status")
+def get_diagnostic_status(id_client: str, agent: dict = Depends(verifier_identifiants)):
+    """
+    Vérifie si le diagnostic IA est disponible pour un dossier.
+    """
+    engine = etat_application['engine']
+    
+    # Chercher dans les deux tables
+    for table in ['predictions_canada', 'apprentissage_canada']:
+        with engine.connect() as conn:
+            result = conn.execute(text(
+                f"SELECT diagnostic_ia_texte FROM {table} WHERE id_client = :id"
+            ), {"id": id_client}).fetchone()
+            if result:
+                diag = result[0]
+                return {
+                    "disponible": diag is not None,
+                    "diagnostic": diag
+                }
+    
+    return {"disponible": False, "diagnostic": None}
+
 # Pour Vercel - le point d'entrée
 app = app
 
