@@ -1664,10 +1664,6 @@ def main(page: ft.Page):
     # CORRECTION dans page_simulateur() - utilisation de l'orbe IA
     
 
-# ============================================================
-# REMPLACEZ toute la fonction page_simulateur() dans main.py
-# ============================================================
-
     def page_simulateur():
         def construire():
             champ_recherche = ft.TextField(
@@ -1680,58 +1676,97 @@ def main(page: ft.Page):
 
             # Cache des IDs pour lesquels le diagnostic est en cours
             diagnostics_en_cours = set()
+            # Stockage des références aux contrôles pour mise à jour
+            controles_diagnostic = {}
 
-            def verifier_et_afficher_diagnostic(id_client: str, zone: ft.Column, tentatives: int = 0):
+            def verifier_et_afficher_diagnostic(id_client: str, tentatives: int = 0):
                 """
                 Vérifie périodiquement si le diagnostic IA est disponible.
+                Version améliorée avec gestion des erreurs et réessai.
                 """
                 if tentatives > 30:  # Maximum 30 tentatives (environ 30 secondes)
                     try:
-                        # Si le diagnostic n'est pas disponible après 30s, afficher un message
-                        zone.controls[1].controls[1].value = "⏱️ Le diagnostic IA prend plus de temps que prévu. Consultez la page 'Détail du dossier' pour le résultat."
-                        zone.controls[1].controls[1].color = ORANGE_ALERTE
-                        # Changer l'icône
-                        zone.controls[1].controls[0].controls[0].icon = ft.icons.WARNING
-                        zone.controls[1].controls[0].controls[0].color = ORANGE_ALERTE
-                        page.update()
-                    except Exception:
-                        pass
+                        # Mettre à jour le texte du diagnostic
+                        if id_client in controles_diagnostic:
+                            texte_diag = controles_diagnostic[id_client]["texte"]
+                            icone_diag = controles_diagnostic[id_client]["icone"]
+                            texte_diag.value = "⏱️ Le diagnostic IA prend plus de temps que prévu. Consultez la page 'Détail du dossier' pour le résultat."
+                            texte_diag.color = ORANGE_ALERTE
+                            icone_diag.icon = ft.icons.WARNING
+                            icone_diag.color = ORANGE_ALERTE
+                            page.update()
+                        diagnostics_en_cours.discard(id_client)
+                    except Exception as e:
+                        print(f"Erreur mise à jour timeout: {e}")
                     return
                 
                 try:
+                    # Vérifier le statut du diagnostic
                     status = client_api.get_diagnostic_status(id_client)
+                    
                     if status.get("disponible") and status.get("diagnostic"):
                         # Diagnostic disponible → mise à jour
                         nouveau_diagnostic = status["diagnostic"]
                         try:
-                            zone.controls[1].controls[1].value = nouveau_diagnostic
-                            zone.controls[1].controls[1].color = GRIS_TEXTE
-                            # Changer l'icône
-                            zone.controls[1].controls[0].controls[0].icon = ft.icons.CHECK_CIRCLE
-                            zone.controls[1].controls[0].controls[0].color = VERT_SUCCES
-                            diagnostics_en_cours.discard(id_client)
-                            page.update()
-                            
-                            # Notification visible
-                            page.snack_bar = ft.SnackBar(
-                                content=ft.Text("✅ Diagnostic IA disponible !", color="#FFFFFF"),
-                                bgcolor=VERT_SUCCES,
-                                duration=3000
-                            )
-                            page.snack_bar.open = True
-                            page.update()
-                        except Exception:
-                            pass
+                            if id_client in controles_diagnostic:
+                                texte_diag = controles_diagnostic[id_client]["texte"]
+                                icone_diag = controles_diagnostic[id_client]["icone"]
+                                texte_diag.value = nouveau_diagnostic
+                                texte_diag.color = GRIS_TEXTE
+                                icone_diag.icon = ft.icons.CHECK_CIRCLE
+                                icone_diag.color = VERT_SUCCES
+                                page.update()
+                                
+                                # Notification visible
+                                page.snack_bar = ft.SnackBar(
+                                    content=ft.Text("✅ Diagnostic IA disponible !", color="#FFFFFF"),
+                                    bgcolor=VERT_SUCCES,
+                                    duration=3000
+                                )
+                                page.snack_bar.open = True
+                                page.update()
+                            else:
+                                # Fallback : recharger la zone des résultats
+                                print(f"Contrôles non trouvés pour {id_client}")
+                        except Exception as e:
+                            print(f"Erreur mise à jour diagnostic: {e}")
+                        
+                        diagnostics_en_cours.discard(id_client)
                         return
                     else:
                         # Pas encore disponible → réessayer dans 1 seconde
                         import threading
-                        threading.Timer(1.0, lambda: verifier_et_afficher_diagnostic(id_client, zone, tentatives + 1)).start()
+                        threading.Timer(1.0, lambda: verifier_et_afficher_diagnostic(id_client, tentatives + 1)).start()
                 except Exception as e:
                     print(f"Erreur vérification diagnostic: {e}")
                     # Réessayer quand même
                     import threading
-                    threading.Timer(2.0, lambda: verifier_et_afficher_diagnostic(id_client, zone, tentatives + 1)).start()
+                    threading.Timer(2.0, lambda: verifier_et_afficher_diagnostic(id_client, tentatives + 1)).start()
+
+            def forcer_rafraichir_diagnostic(id_client: str):
+                def handler(e):
+                    try:
+                        notification(page, "Récupération du diagnostic en cours...", succes=True)
+                        status = client_api.get_diagnostic_status(id_client)
+                        if status.get("disponible") and status.get("diagnostic"):
+                            # Mettre à jour l'affichage
+                            if id_client in controles_diagnostic:
+                                texte_diag = controles_diagnostic[id_client]["texte"]
+                                icone_diag = controles_diagnostic[id_client]["icone"]
+                                texte_diag.value = status["diagnostic"]
+                                texte_diag.color = GRIS_TEXTE
+                                icone_diag.icon = ft.icons.CHECK_CIRCLE
+                                icone_diag.color = VERT_SUCCES
+                                page.update()
+                                notification(page, "Diagnostic récupéré !", succes=True)
+                            else:
+                                # Recharger toute la simulation
+                                finaliser_et_afficher(id_client, zone_resultats)
+                        else:
+                            notification(page, "Diagnostic pas encore disponible, réessayez dans quelques secondes.", succes=False)
+                    except Exception as err:
+                        notification(page, f"Erreur : {err}", succes=False)
+                return handler
 
             def finaliser_et_afficher(id_client: str, zone: ft.Column):
                 """Fonction callback appelée après l'animation de l'orbe IA.
@@ -1777,7 +1812,9 @@ def main(page: ft.Page):
                             ft.Row([
                                 ft.Icon(ft.icons.INFO_OUTLINE, color=GRIS_MOYEN, size=16),
                                 ft.Text(
-                                    "Note : Les gains sont des estimations individuelles, une modification à la fois.",
+                                    "Note : Les gains sont des estimations individuelles, une modification à la fois. "
+                                    "L'effet combiné de plusieurs modifications peut être différent "
+                                    "(interactions non-linéaires).",
                                     size=12,
                                     color=GRIS_MOYEN,
                                     italic=True,
@@ -1796,14 +1833,25 @@ def main(page: ft.Page):
 
                     metriques = get_metriques_cache(client_api)
                     
-                    # Ajouter une indication si le diagnostic est en cours
+                    # Créer l'icône et le texte du diagnostic avec des références
+                    icone_diagnostic = ft.Icon(
+                        ft.icons.HOURGLASS_TOP if diagnostic_en_cours else ft.icons.CHECK_CIRCLE,
+                        color=ORANGE_ALERTE if diagnostic_en_cours else GRIS_TEXTE,
+                        size=18
+                    )
+                    texte_diagnostic = ft.Text(
+                        diagnostic_texte,
+                        size=13,
+                        color=ORANGE_ALERTE if diagnostic_en_cours else GRIS_TEXTE
+                    )
+                    
+                    # Stocker les références pour mise à jour ultérieure
                     if diagnostic_en_cours:
+                        controles_diagnostic[id_client] = {
+                            "icone": icone_diagnostic,
+                            "texte": texte_diagnostic
+                        }
                         diagnostics_en_cours.add(id_client)
-                        diagnostic_couleur = ORANGE_ALERTE
-                        diagnostic_icone = ft.icons.HOURGLASS_TOP
-                    else:
-                        diagnostic_couleur = GRIS_TEXTE
-                        diagnostic_icone = ft.icons.CHECK_CIRCLE
                     
                     zone.controls = [
                         carte(ft.Column(blocs)),
@@ -1811,10 +1859,17 @@ def main(page: ft.Page):
                         carte(
                             ft.Column([
                                 ft.Row([
-                                    ft.Icon(diagnostic_icone, color=diagnostic_couleur, size=18),
-                                    ft.Text("Diagnostic Data Analyst (IA)", size=15, weight=ft.FontWeight.BOLD),
+                                    icone_diagnostic,
+                                    ft.Text("Diagnostic Data Analyst (IA)", size=15, weight=ft.FontWeight.BOLD, expand=True),
+                                    ft.IconButton(
+                                        icon=ft.icons.REFRESH,
+                                        icon_size=18,
+                                        tooltip="Rafraîchir le diagnostic",
+                                        on_click=forcer_rafraichir_diagnostic(id_client),
+                                        disabled=not diagnostic_en_cours
+                                    ),
                                 ], spacing=8),
-                                ft.Text(diagnostic_texte, size=13, color=diagnostic_couleur),
+                                texte_diagnostic,
                             ])
                         ),
                         ft.Container(height=16),
@@ -1839,7 +1894,9 @@ def main(page: ft.Page):
                     
                     # Si le diagnostic est en cours, lancer la vérification périodique
                     if diagnostic_en_cours:
-                        verifier_et_afficher_diagnostic(id_client, zone)
+                        # Attendre 2 secondes avant de commencer à vérifier
+                        import threading
+                        threading.Timer(2.0, lambda: verifier_et_afficher_diagnostic(id_client, 0)).start()
                     
                 except ErreurAPI as err:
                     zone.controls = [ft.Text(f"Erreur : {err.message}", color=ROUGE_CANADA)]
