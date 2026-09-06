@@ -593,6 +593,10 @@ def endpoint_simulateur(profil: ProfilCandidat, agent: dict = Depends(verifier_i
 # CORRECTION dans main_api.py - simplifie _construire_rapport,
 # supprime le "gate" bloquant, appelle toujours predire_client
 
+# ============================================================
+# REMPLACEZ la partie vérification du diagnostic dans _construire_rapport
+# ============================================================
+
 def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bool = True):
     """
     Récupère le dossier (actif ou archive) et son diagnostic.
@@ -611,17 +615,22 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
     diagnostic_texte = None
     if not force:
         diagnostic_texte = dossier.get("diagnostic_ia_texte")
+        # Vérifier que le diagnostic est valide (pas None, pas vide, pas un message d'erreur)
         if diagnostic_texte and diagnostic_texte != "":
-            logger.info(f"Diagnostic récupéré du cache pour {id_client} (table {table})")
-            # On retourne directement avec le diagnostic existant
-            resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
-            scenarios = []
-            try:
-                simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
-                scenarios = simulation['scenarios_ameliorations']
-            except Exception as e:
-                logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
-            return dossier, resultat, diagnostic_texte, scenarios, None
+            # Si c'est un message d'erreur, on le régénère
+            if any(mot in diagnostic_texte for mot in ["indisponible", "Erreur", "manquante"]):
+                logger.info(f"Diagnostic invalide pour {id_client}, régénération forcée")
+                force = True
+            else:
+                logger.info(f"Diagnostic récupéré du cache pour {id_client} (table {table})")
+                resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
+                scenarios = []
+                try:
+                    simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
+                    scenarios = simulation['scenarios_ameliorations']
+                except Exception as e:
+                    logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
+                return dossier, resultat, diagnostic_texte, scenarios, None
     
     resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
     
@@ -645,20 +654,22 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
                 est_archive=est_archive,
                 decision_reelle=dossier.get('visa_decision') if est_archive else None
             )
-            # Stocker en base UNIQUEMENT si demandé
+            # Stocker en base UNIQUEMENT si le diagnostic est valide
             if stocker_en_base and diagnostic_texte and diagnostic_texte != "":
-                engine = etat_application['engine']
-                with engine.connect() as conn:
-                    conn.execute(text(
-                        f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
-                    ), {"diag": diagnostic_texte, "id": id_client})
-                    conn.commit()
-                logger.info(f"Diagnostic généré et stocké pour {id_client} dans {table}")
-            elif stocker_en_base:
-                logger.warning(f"Diagnostic vide pour {id_client}, non stocké")
+                # Vérifier que ce n'est pas un message d'erreur
+                if not any(mot in diagnostic_texte for mot in ["indisponible", "Erreur", "manquante"]):
+                    engine = etat_application['engine']
+                    with engine.connect() as conn:
+                        conn.execute(text(
+                            f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
+                        ), {"diag": diagnostic_texte, "id": id_client})
+                        conn.commit()
+                    logger.info(f"Diagnostic généré et stocké pour {id_client} dans {table}")
+                else:
+                    logger.warning(f"Diagnostic invalide pour {id_client}, non stocké")
         except Exception as e:
             logger.error(f"Erreur diagnostic IA {id_client} : {e}", exc_info=True)
-            diagnostic_texte = "Diagnostic IA temporairement indisponible (probleme de connexion au service)."
+            diagnostic_texte = "Diagnostic IA temporairement indisponible (problème de connexion au service)."
     
     return dossier, resultat, diagnostic_texte, scenarios, None
 
@@ -1525,6 +1536,9 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
     diagnostic_temp = "🤖 Génération du diagnostic IA en cours... Les résultats détaillés seront disponibles dans quelques secondes."
     
     # 5. Lancer la génération du diagnostic IA en arrière-plan (non bloquant)
+
+
+    # 5. Lancer la génération du diagnostic IA en arrière-plan (non bloquant)
     def generer_diagnostic_en_arriere_plan():
         try:
             # Récupérer les top features
@@ -1540,17 +1554,21 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
                 decision_reelle=dossier.get('visa_decision') if est_archive else None
             )
             
-            # Stocker en base uniquement si le diagnostic n'est pas vide
-            if diagnostic_complet and diagnostic_complet != "":
-                engine = etat_application['engine']
-                with engine.connect() as conn:
-                    conn.execute(text(
-                        f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
-                    ), {"diag": diagnostic_complet, "id": id_client})
-                    conn.commit()
-                logger.info(f"Diagnostic IA généré en arrière-plan pour {id_client}")
+            # Stocker en base UNIQUEMENT si le diagnostic est valide (pas d'erreur, pas vide)
+            if diagnostic_complet and diagnostic_complet != "" and not diagnostic_complet.startswith("Diagnostic IA"):
+                # Vérifier que ce n'est pas un message d'erreur
+                if not any(mot in diagnostic_complet for mot in ["indisponible", "Erreur", "manquante"]):
+                    engine = etat_application['engine']
+                    with engine.connect() as conn:
+                        conn.execute(text(
+                            f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
+                        ), {"diag": diagnostic_complet, "id": id_client})
+                        conn.commit()
+                    logger.info(f"Diagnostic IA généré en arrière-plan pour {id_client}")
+                else:
+                    logger.warning(f"Diagnostic IA contient une erreur pour {id_client}, non stocké")
             else:
-                logger.warning(f"Diagnostic vide pour {id_client}, non stocké")
+                logger.warning(f"Diagnostic vide ou invalide pour {id_client}, non stocké")
             
         except Exception as e:
             logger.error(f"Erreur diagnostic IA en arrière-plan {id_client} : {e}", exc_info=True)

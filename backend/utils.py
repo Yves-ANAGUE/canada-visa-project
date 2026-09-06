@@ -687,7 +687,8 @@ def profil_complet_pour_prediction(profil_dict: dict) -> bool:
 # utils.py - Ajouter à la fin
 
 # ============================================================
-# REMPLACEZ la fonction generer_diagnostic_openrouter dans utils.py
+# REMPLACEZ COMPLÈTEMENT la fonction generer_diagnostic_openrouter
+# dans backend/utils.py
 # ============================================================
 
 def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
@@ -702,6 +703,7 @@ def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
     import os
     import requests
     import numpy as np
+    import re
 
     OPENROUTER_API_KEY = os.environ.get('OPENROUTER_API_KEY', '')
     if not OPENROUTER_API_KEY:
@@ -709,6 +711,12 @@ def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
 
     OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
     MODEL = "openrouter/free"
+
+    # S'assurer que profil_brut n'est pas None
+    if profil_brut is None:
+        profil_brut = {}
+    if resultat_prediction is None:
+        resultat_prediction = {"decision_predite": "Inconnue", "probabilite_acceptation": 0, "niveau_confiance": "-"}
 
     if top_facteurs_globaux is not None and not top_facteurs_globaux.empty:
         top5 = top_facteurs_globaux.head(5)['Variable_origine'].tolist()
@@ -736,15 +744,14 @@ def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
     nclc_vals = [profil_brut.get(c) for c in ['nclc_speaking_french','nclc_listening_french','nclc_reading_french','nclc_writing_french'] if profil_brut.get(c) is not None]
     nclc_info = f"NCLC français : min {min(nclc_vals) if nclc_vals else 'non renseigné'}"
 
-    # --- PROMPT CORRIGÉ POUR ÉVITER LES RÉFLEXIONS DE L'IA ---
-    
+    # Construction du prompt
     if est_archive and decision_reelle:
         prompt = f"""Tu es un analyste expert en immigration canadienne. Tu dois produire UNIQUEMENT le diagnostic final, sans commentaires sur ta propre réflexion.
 
 📁 ANALYSE RÉTROSPECTIVE D'UN DOSSIER CLOS
 
 Ce dossier est ARCHIVÉ avec une décision réelle : {decision_reelle}.
-Le modèle ML avait prédit : {resultat_prediction['decision_predite']} ({resultat_prediction['probabilite_acceptation']*100:.1f}%) - décision {"alignée" if decision_reelle == resultat_prediction['decision_predite'] else "différente"} avec la réalité.
+Le modèle ML avait prédit : {resultat_prediction.get('decision_predite', 'Inconnue')} ({resultat_prediction.get('probabilite_acceptation', 0)*100:.1f}%) - décision {"alignée" if decision_reelle == resultat_prediction.get('decision_predite') else "différente"} avec la réalité.
 
 📊 DONNÉES DU DOSSIER :
 - Programme : {profil_brut.get('program') or 'inconnu'}
@@ -806,9 +813,9 @@ IMPORTANT : Produis UNIQUEMENT le contenu final demandé. Ne mentionne pas tes c
 - Famille au Canada : {profil_brut.get('family_in_canada') or 'inconnu'}
 
 📈 RÉSULTAT DU MODÈLE :
-- Décision prédite : {resultat_prediction['decision_predite']}
-- Probabilité : {resultat_prediction['probabilite_acceptation']*100:.1f}%
-- Niveau de confiance : {resultat_prediction['niveau_confiance']}
+- Décision prédite : {resultat_prediction.get('decision_predite', 'Inconnue')}
+- Probabilité : {resultat_prediction.get('probabilite_acceptation', 0)*100:.1f}%
+- Niveau de confiance : {resultat_prediction.get('niveau_confiance', '-')}
 - Facteurs clés du modèle : {', '.join(top5)}
 
 {recommandations_simulateur}
@@ -846,9 +853,11 @@ IMPORTANT :
         result = response.json()
         diagnostic = result['choices'][0]['message']['content']
         
+        # Vérifier que diagnostic n'est pas None
+        if diagnostic is None:
+            return "Diagnostic IA : réponse vide reçue du service."
+        
         # Nettoyage : supprimer les éventuelles réflexions résiduelles
-        # Si le texte commence par des mots comme "Voici", "Je vais", "D'après", on nettoie
-        import re
         mots_a_supprimer = [
             r'^Voici\s+', r'^Je vais\s+', r'^D\'après\s+', r'^Je pense\s+',
             r'^Voilà\s+', r'^Je vous\s+', r'^Tout d\'abord\s+'
@@ -860,6 +869,10 @@ IMPORTANT :
         if diagnostic and len(diagnostic) > 0:
             diagnostic = diagnostic[0].upper() + diagnostic[1:]
         
+        # Si le diagnostic est vide après nettoyage, retourner un message
+        if not diagnostic or diagnostic.strip() == "":
+            return "Diagnostic IA : le service a retourné une réponse vide."
+        
         return diagnostic
         
     except requests.exceptions.HTTPError as e:
@@ -867,4 +880,7 @@ IMPORTANT :
             return "Le service de diagnostic IA a atteint sa limite de requêtes (trop de demandes). Réessayez dans quelques minutes."
         return f"Erreur API OpenRouter : {str(e)}"
     except Exception as e:
-        return f"Diagnostic IA temporairement indisponible (erreur : {str(e)})"
+        error_msg = str(e)
+        if "NoneType" in error_msg:
+            return "Diagnostic IA : erreur de traitement. Veuillez réessayer."
+        return f"Diagnostic IA temporairement indisponible (erreur : {error_msg})"
