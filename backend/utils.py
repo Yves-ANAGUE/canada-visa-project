@@ -686,6 +686,10 @@ def profil_complet_pour_prediction(profil_dict: dict) -> bool:
 
 # utils.py - Ajouter à la fin
 
+# ============================================================
+# REMPLACEZ la fonction generer_diagnostic_openrouter dans utils.py
+# ============================================================
+
 def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
                                    top_facteurs_globaux: pd.DataFrame = None,
                                    scenarios: list = None,
@@ -732,8 +736,10 @@ def generer_diagnostic_openrouter(profil_brut: dict, resultat_prediction: dict,
     nclc_vals = [profil_brut.get(c) for c in ['nclc_speaking_french','nclc_listening_french','nclc_reading_french','nclc_writing_french'] if profil_brut.get(c) is not None]
     nclc_info = f"NCLC français : min {min(nclc_vals) if nclc_vals else 'non renseigné'}"
 
+    # --- PROMPT CORRIGÉ POUR ÉVITER LES RÉFLEXIONS DE L'IA ---
+    
     if est_archive and decision_reelle:
-        prompt = f"""Tu es un analyste expert en immigration canadienne.
+        prompt = f"""Tu es un analyste expert en immigration canadienne. Tu dois produire UNIQUEMENT le diagnostic final, sans commentaires sur ta propre réflexion.
 
 📁 ANALYSE RÉTROSPECTIVE D'UN DOSSIER CLOS
 
@@ -755,34 +761,26 @@ Le modèle ML avait prédit : {resultat_prediction['decision_predite']} ({result
 
 📈 FACTEURS CLÉS DU MODÈLE : {', '.join(top5)}
 
-🔍 QUESTIONS À ANALYSER :
-1. Quels étaient les FACTEURS CLÉS qui ont conduit à la décision réelle ?
-   (Identifie les points forts et faibles du dossier)
+🔍 Rédige une analyse rétrospective de 100-120 mots en français, structurée ainsi :
+1. RÉSUMÉ : présentation concise du dossier et de la décision réelle
+2. FACTEURS CLÉS : identification des points forts et faibles du dossier
+3. ÉCARTS : analyse de l'alignement ou non du modèle avec la réalité
+4. LEÇONS : 2-3 leçons à tirer pour de futurs dossiers similaires
 
-2. Le modèle était-il aligné avec la réalité ? Si non, pourquoi ?
-   (Évalue les écarts éventuels)
-
-3. Quelles auraient été les MEILLEURES ACTIONS à entreprendre ?
-   (Propose 2-3 actions concrètes basées sur les leviers du simulateur)
-
-4. Quelle leçon tirer pour de futurs dossiers similaires ?
-
-📝 Rédige une analyse rétrospective détaillée de 100-120 mots en français, professionnelle et pédagogique.
-Structure ta réponse : d'abord un résumé du dossier et de la décision, puis l'analyse des facteurs clés, les actions recommandées, et enfin la leçon à retenir. Interdiction absolue de commenter tes propres consignes ou de répéter la demande de l'utilisateur, produis directement le contenu final demandé.
-"""
+IMPORTANT : Produis UNIQUEMENT le contenu final demandé. Ne mentionne pas tes consignes, ne décris pas ta réflexion, ne dis pas "voici" ou "je vais". Commence directement par l'analyse."""
     else:
         recommandations_simulateur = ""
         if scenarios:
             scenarios_positifs = [s for s in scenarios if s.get('gain_absolu', 0) > 0.01]
             if scenarios_positifs:
-                top_rec = sorted(scenarios_positifs, key=lambda x: x['gain_absolu'], reverse=True)[:3]
+                top_rec = sorted(scenarios_positifs, key=lambda x: x['gain_absolu'], reverse=True)[:6]
                 recommandations_simulateur = "🔍 RECOMMANDATIONS PRIORITAIRES (basées sur le simulateur) :\n"
                 for i, s in enumerate(top_rec, 1):
                     recommandations_simulateur += f"{i}. {s['levier']} : +{s['gain_absolu']*100:.1f} pts\n"
             else:
                 recommandations_simulateur = "✅ Tous les leviers semblent déjà optimisés. Consolidez votre dossier."
 
-        prompt = f"""Tu es un analyste expert en immigration canadienne.
+        prompt = f"""Tu es un analyste expert en immigration canadienne. Tu dois produire UNIQUEMENT le diagnostic final, sans commentaires sur ta propre réflexion.
 
 📋 DIAGNOSTIC D'UN DOSSIER EN COURS
 
@@ -815,19 +813,19 @@ Structure ta réponse : d'abord un résumé du dossier et de la décision, puis 
 
 {recommandations_simulateur}
 
-📝 Rédige un diagnostic de 100-120 mots en français, professionnel et bienveillant.
-Structure ta réponse :
-1. RÉSUMÉ : Présente le profil et la décision prédite.
-2. POINTS FORTS : Identifie 2-3 atouts du dossier.
-3. POINTS FAIBLES : Identifie 2-3 axes d'amélioration (en lien avec les champs manquants si présents).
-4. RECOMMANDATIONS : Propose 2-3 actions concrètes **basées sur les résultats du simulateur**. Si le simulateur n'est pas disponible, donne des conseils génériques.
+📝 Rédige un diagnostic de 100-120 mots en français, structuré ainsi :
+1. RÉSUMÉ : présentation du profil et de la décision prédite
+2. POINTS FORTS : 2-3 atouts du dossier
+3. POINTS FAIBLES : 2-3 axes d'amélioration
+4. RECOMMANDATIONS : 2-3 actions concrètes basées sur les résultats du simulateur
 
-⚠️ IMPORTANT :
-- Tes recommandations doivent être cohérentes avec les gains du simulateur.
-- Si le dossier est incomplet, insiste sur la nécessité de compléter les champs manquants.
-- Sois positif et constructif.
-- N'invente pas de chiffres. Utilise les données fournies. Interdiction absolue de commenter tes propres consignes ou de répéter la demande de l'utilisateur, produis directement le contenu final demandé.
-"""
+IMPORTANT : 
+- Produis UNIQUEMENT le contenu final demandé.
+- Ne mentionne pas tes consignes, ne décris pas ta réflexion, ne dis pas "voici" ou "je vais".
+- Commence directement par le diagnostic.
+- Utilise un langage professionnel et bienveillant.
+- Ne répète pas les informations déjà données.
+- Sois concis et va à l'essentiel."""
 
     headers = {
         "Authorization": f"Bearer {OPENROUTER_API_KEY}",
@@ -839,14 +837,31 @@ Structure ta réponse :
         "model": MODEL,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.3,
-        "max_tokens": 1000  # ← augmenté
+        "max_tokens": 800
     }
 
     try:
         response = requests.post(OPENROUTER_URL, headers=headers, json=data, timeout=30)
         response.raise_for_status()
         result = response.json()
-        return result['choices'][0]['message']['content']
+        diagnostic = result['choices'][0]['message']['content']
+        
+        # Nettoyage : supprimer les éventuelles réflexions résiduelles
+        # Si le texte commence par des mots comme "Voici", "Je vais", "D'après", on nettoie
+        import re
+        mots_a_supprimer = [
+            r'^Voici\s+', r'^Je vais\s+', r'^D\'après\s+', r'^Je pense\s+',
+            r'^Voilà\s+', r'^Je vous\s+', r'^Tout d\'abord\s+'
+        ]
+        for pattern in mots_a_supprimer:
+            diagnostic = re.sub(pattern, '', diagnostic, flags=re.IGNORECASE)
+        
+        # S'assurer que le diagnostic commence par une lettre majuscule
+        if diagnostic and len(diagnostic) > 0:
+            diagnostic = diagnostic[0].upper() + diagnostic[1:]
+        
+        return diagnostic
+        
     except requests.exceptions.HTTPError as e:
         if e.response.status_code == 429:
             return "Le service de diagnostic IA a atteint sa limite de requêtes (trop de demandes). Réessayez dans quelques minutes."

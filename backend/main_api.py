@@ -662,6 +662,31 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
     
     return dossier, resultat, diagnostic_texte, scenarios, None
 
+
+
+def forcer_recharger_diagnostic(id_client: str) -> dict:
+    """
+    Force le rechargement du diagnostic depuis la base de données.
+    Utile après une régénération.
+    """
+    engine = etat_application['engine']
+    
+    # Chercher dans les deux tables
+    for table in ['predictions_canada', 'apprentissage_canada']:
+        with engine.connect() as conn:
+            result = conn.execute(text(
+                f"SELECT diagnostic_ia_texte FROM {table} WHERE id_client = :id"
+            ), {"id": id_client}).fetchone()
+            if result and result[0]:
+                return {
+                    "disponible": True,
+                    "diagnostic": result[0],
+                    "table": table
+                }
+    
+    return {"disponible": False, "diagnostic": None, "table": None}
+
+
 @app.post("/dossiers/{id_client}/regenerer-diagnostic")
 def regenerer_diagnostic(id_client: str, agent: dict = Depends(verifier_identifiants)):
     """
@@ -676,6 +701,10 @@ def regenerer_diagnostic(id_client: str, agent: dict = Depends(verifier_identifi
     # Vérifier que le diagnostic a bien été stocké
     logger.info(f"Diagnostic régénéré pour {id_client}, longueur: {len(diagnostic) if diagnostic else 0}")
     
+    # Si le diagnostic est vide, retourner un message d'erreur
+    if not diagnostic or diagnostic == "":
+        diagnostic = "⚠️ La régénération du diagnostic a échoué. Veuillez réessayer."
+    
     return {
         "diagnostic_ia": diagnostic,
         "resultat": resultat,
@@ -686,6 +715,10 @@ def regenerer_diagnostic(id_client: str, agent: dict = Depends(verifier_identifi
 # Ajout de la route de simulation avec mise à jour du diagnostic
 # ============================================================
 # REMPLACEZ cette fonction dans main_api.py
+# ============================================================
+
+# ============================================================
+# REMPLACEZ dans simuler_dossier (main_api.py)
 # ============================================================
 
 @app.post("/dossiers/{id_client}/simuler")
@@ -699,12 +732,11 @@ def simuler_dossier(id_client: str, agent: dict = Depends(verifier_identifiants)
         id_client, force=True, stocker_en_base=False
     )
     
-    # On recalcule les scénarios pour être sûr (LIMITÉ à 5 pour plus de rapidité)
+    # On recalcule les scénarios (LIMITÉ à 6)
     try:
         profil = nettoyer_decimals({c: dossier.get(c) for c in COLONNES_BRUTES_ATTENDUES})
         simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
-        # Limiter à 5 scénarios pour le simulateur (plus rapide)
-        scenarios = simulation['scenarios_ameliorations'][:5]
+        scenarios = simulation['scenarios_ameliorations'][:6]  # ← REMIS À 6
     except Exception as e:
         logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
         scenarios = []
@@ -1443,6 +1475,10 @@ def endpoint_performance_par_pays(agent: dict = Depends(verifier_identifiants)):
 import os
 
 
+# ============================================================
+# REMPLACEZ dans simuler_dossier_async (main_api.py)
+# ============================================================
+
 @app.post("/dossiers/{id_client}/simuler-async")
 def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identifiants)):
     """
@@ -1461,7 +1497,7 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
     # 2. Simulation des scénarios (rapide, uniquement ML)
     try:
         simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
-        scenarios = simulation['scenarios_ameliorations'][:5]  # Limité à 5
+        scenarios = simulation['scenarios_ameliorations'][:6]  # ← REMIS À 6
     except Exception as e:
         logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
         scenarios = []
@@ -1474,7 +1510,7 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
         ), {"id": id_client}).fetchone()
         diagnostic_existant = existing[0] if existing else None
     
-    if diagnostic_existant:
+    if diagnostic_existant and diagnostic_existant != "":
         # Si un diagnostic existe déjà, on le réutilise immédiatement
         logger.info(f"Diagnostic existant trouvé pour {id_client}, réutilisation")
         return {
@@ -1486,7 +1522,7 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
         }
     
     # 4. Sinon, diagnostic temporaire (message de chargement)
-    diagnostic_temp = "Génération du diagnostic IA en cours... Les résultats détaillés seront disponibles dans quelques secondes."
+    diagnostic_temp = "🤖 Génération du diagnostic IA en cours... Les résultats détaillés seront disponibles dans quelques secondes."
     
     # 5. Lancer la génération du diagnostic IA en arrière-plan (non bloquant)
     def generer_diagnostic_en_arriere_plan():
@@ -1504,15 +1540,17 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
                 decision_reelle=dossier.get('visa_decision') if est_archive else None
             )
             
-            # Stocker en base
-            engine = etat_application['engine']
-            with engine.connect() as conn:
-                # Utiliser UPDATE avec vérification que la ligne existe
-                conn.execute(text(
-                    f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
-                ), {"diag": diagnostic_complet, "id": id_client})
-                conn.commit()
-            logger.info(f"Diagnostic IA généré en arrière-plan pour {id_client}")
+            # Stocker en base uniquement si le diagnostic n'est pas vide
+            if diagnostic_complet and diagnostic_complet != "":
+                engine = etat_application['engine']
+                with engine.connect() as conn:
+                    conn.execute(text(
+                        f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
+                    ), {"diag": diagnostic_complet, "id": id_client})
+                    conn.commit()
+                logger.info(f"Diagnostic IA généré en arrière-plan pour {id_client}")
+            else:
+                logger.warning(f"Diagnostic vide pour {id_client}, non stocké")
             
         except Exception as e:
             logger.error(f"Erreur diagnostic IA en arrière-plan {id_client} : {e}", exc_info=True)
