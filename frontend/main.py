@@ -4,7 +4,7 @@ import flet as ft
 import os
 
 import time
-
+from datetime import datetime
 from datetime import date
 
 from sqlalchemy import Engine, text
@@ -32,6 +32,56 @@ from components import (
 from theme import DRAPEAU_CANADA_URL, DRAPEAU_CAMEROUN_URL
 
 
+# Cache global des métriques du modèle (partagé entre toutes les pages)
+# Durée de validité : 1 heure (3600 secondes)
+CACHE_METRIQUES = {
+    "value": None,          # Les données des métriques
+    "timestamp": None,      # Horodatage du dernier appel
+    "ttl": 3600            # Time-To-Live : 1 heure en secondes
+}
+
+def get_metriques_cache(client_api):
+    """
+    Récupère les métriques du modèle avec cache global.
+    Si le cache est expiré ou vide, fait un appel API.
+    """
+    import time
+    
+    maintenant = time.time()
+    
+    # Vérifier si le cache est valide
+    if (CACHE_METRIQUES["value"] is not None and 
+        CACHE_METRIQUES["timestamp"] is not None and
+        (maintenant - CACHE_METRIQUES["timestamp"]) < CACHE_METRIQUES["ttl"]):
+        # Cache valide → utilisation immédiate
+        return CACHE_METRIQUES["value"]
+    
+    # Cache expiré ou vide → appel API
+    try:
+        metriques = client_api.metriques_modele()
+        CACHE_METRIQUES["value"] = metriques
+        CACHE_METRIQUES["timestamp"] = maintenant
+        return metriques
+    except Exception as e:
+        # En cas d'erreur, retourner les anciennes métriques si elles existent
+        if CACHE_METRIQUES["value"] is not None:
+            return CACHE_METRIQUES["value"]
+        # Sinon, retourner des métriques vides
+        return {"accuracy": None, "precision_score": None, "recall_score": None, 
+                "f1_score": None, "roc_auc": None, "date_execution": None}
+
+def forcer_rafraichir_cache(client_api):
+    """
+    Force le rafraîchissement du cache (utile après un réentraînement).
+    """
+    import time
+    try:
+        metriques = client_api.metriques_modele()
+        CACHE_METRIQUES["value"] = metriques
+        CACHE_METRIQUES["timestamp"] = time.time()
+        return metriques
+    except Exception as e:
+        return CACHE_METRIQUES["value"]
 
 # CORRECTION dans main.py - remplace toute la logique de navigation
 
@@ -503,10 +553,12 @@ def main(page: ft.Page):
         def construire():
             
             # CHARGEMENT DES DONNEES
-            
             importance = client_api.feature_importance()
             stats = client_api.statistiques_globales()
-            metriques = client_api.metriques_modele()
+            
+            # UTILISATION DU CACHE GLOBAL POUR LES MÉTRIQUES
+            metriques = get_metriques_cache(client_api)  # ← REMPLACÉ
+            
             pays_data = client_api.repartition_pays()
             secteur_data = client_api.taux_par_secteur()
             education_data = client_api.taux_par_education()
@@ -655,20 +707,30 @@ def main(page: ft.Page):
                     carte(ft.Column([
                         ft.Row([
                             ft.Text("Metriques et performances actuelles du modele", size=15, weight=ft.FontWeight.BOLD),
-                            ft.IconButton(
-                                icon=ft.icons.REFRESH,
-                                icon_size=20,
-                                tooltip="Rafraichir les metriques",
-                                on_click=lambda e: page.go("/dashboard")
-                            ),
+                            ft.Row([
+                                ft.IconButton(
+                                    icon=ft.icons.REFRESH,
+                                    icon_size=18,
+                                    tooltip="Rafraîchir les métriques (forcer le cache)",
+                                    on_click=lambda e: forcer_rafraichir_cache(client_api) or page.update()
+                                ),
+                            ])
                         ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        ft.Text(texte_metriques(metriques), size=13, color=GRIS_MOYEN),
-                        ft.Text(
-                            f"Derniere mise a jour : {date_formatee}",
-                            size=11,
-                            color=GRIS_MOYEN,
-                            italic=True
-                        ),
+                        ft.Text(texte_metriques(get_metriques_cache(client_api)), size=13, color=GRIS_MOYEN),
+                        ft.Row([
+                            ft.Text(
+                                f"Cache mis à jour : {CACHE_METRIQUES['timestamp'] and datetime.fromtimestamp(CACHE_METRIQUES['timestamp']).strftime('%d/%m/%Y %H:%M:%S') or 'jamais'}",
+                                size=11,
+                                color=GRIS_MOYEN,
+                                italic=True
+                            ),
+                            ft.Text(
+                                f" | Expire dans : {int(CACHE_METRIQUES['ttl'] - (time.time() - CACHE_METRIQUES['timestamp'])) if CACHE_METRIQUES['timestamp'] else 0}s",
+                                size=11,
+                                color=GRIS_MOYEN,
+                                italic=True
+                            ),
+                        ]),
                     ]))
                 ], col=12),
             ], columns=12)
@@ -1158,36 +1220,22 @@ def main(page: ft.Page):
                 dialogue.open = True
                 page.update()
             
-
-
             def action_regenerer_diagnostic(e):
                 try:
-                    # Afficher un indicateur de chargement
                     notification(page, "Régénération du diagnostic en cours...", succes=True)
-                    
-                    # L'appel POST retourne directement le nouveau diagnostic
                     reponse = client_api.regenerer_diagnostic(id_client)
-                    
-                    # Mise à jour immédiate de l'affichage
-                    nouveau_diagnostic = reponse.get("diagnostic_ia", "Diagnostic non disponible.")
-                    nouveaux_scenarios = reponse.get("scenarios", [])
-                    nouveau_resultat = reponse.get("resultat", {})
+                    notification(page, "Diagnostic régénéré avec succès.")
                     
                     # Reconstruire la vue actuelle pour rafraîchir le contenu
-                    # On récupère la vue actuelle
                     vue_actuelle = page.views[-1] if page.views else None
                     if vue_actuelle and vue_actuelle.route == f"/dossier/{id_client}":
-                        # Recréer la vue avec les nouvelles données
                         page.views[-1] = page_detail_dossier(id_client)
                         page.update()
                     else:
-                        # Fallback : navigation
                         page.go(f"/dossier/{id_client}")
                     
-                    notification(page, "Diagnostic régénéré avec succès.")
-                    
                 except ErreurAPI as err:
-                    notification(page, f"Erreur : {err.message}", succes=False)            
+                    notification(page, f"Erreur : {err.message}", succes=False)
 
             def action_pdf(e):
                 page.launch_url(client_api.telecharger_pdf_url(id_client))
@@ -1234,8 +1282,6 @@ def main(page: ft.Page):
 
             def action_modifier(e):
                 aller_vers(f"/modifier-dossier/{id_client}")
-            
-
 
             actions_disponibles = []
             if est_archive:
@@ -1274,6 +1320,9 @@ def main(page: ft.Page):
                         on_click=action_supprimer
                     ),
                 ]
+
+            # UTILISATION DU CACHE GLOBAL POUR LES MÉTRIQUES
+            metriques = get_metriques_cache(client_api)
 
             return ft.Column([
                 ft.Row([
@@ -1321,11 +1370,8 @@ def main(page: ft.Page):
                             size=12,
                             color=GRIS_MOYEN
                         ),
-                        
-                        # METRIQUES DYNAMIQUES - remplace le texte statique
-                        
                         ft.Text(
-                            texte_metriques(client_api.metriques_modele()),
+                            texte_metriques(metriques),
                             size=11,
                             color=GRIS_MOYEN
                         ),
@@ -1348,15 +1394,14 @@ def main(page: ft.Page):
                 ft.Container(height=20),
                 ft.Row([
                     ft.ElevatedButton(
-                            content=ft.Row([
-                                ft.Icon(ft.icons.REFRESH, color="#FFFFFF"),
-                                ft.Text("Régénérer le diagnostic IA")
-                            ], spacing=8),
-                            bgcolor=BLEU_GLACIER,
-                            color="#FFFFFF",
-                            on_click=action_regenerer_diagnostic
-                        ),                    
-                    
+                        content=ft.Row([
+                            ft.Icon(ft.icons.REFRESH, color="#FFFFFF"),
+                            ft.Text("Régénérer le diagnostic IA")
+                        ], spacing=8),
+                        bgcolor=BLEU_GLACIER,
+                        color="#FFFFFF",
+                        on_click=action_regenerer_diagnostic
+                    ),
                     ft.ElevatedButton(
                         content=ft.Row([
                             ft.Icon(ft.icons.PICTURE_AS_PDF_OUTLINED, color="#FFFFFF"),
@@ -1629,18 +1674,10 @@ def main(page: ft.Page):
             liste_candidats = ft.Column([])
             zone_resultats = ft.Column([])
 
-# ============================================================
-# REMPLACEZ cette fonction dans main.py (page_simulateur)
-# ============================================================
-
-            # Cache des métriques pour éviter un appel API supplémentaire
-            metriques_cache = {"value": None, "timestamp": None}
-            
             def finaliser_et_afficher(id_client: str, zone: ft.Column):
                 """Fonction callback appelée après l'animation de l'orbe IA.
-                   Affiche les résultats SANS stocker en base (simulation rapide)."""
+                Affiche les résultats SANS stocker en base (simulation rapide)."""
                 try:
-                    # Récupérer les résultats de la simulation
                     complet = client_api.simuler_dossier(id_client)
                     resultat = complet.get("resultat") or {}
                     scenarios = complet.get("scenarios") or []
@@ -1697,12 +1734,8 @@ def main(page: ft.Page):
                             )
                         )
 
-                    # Récupérer les métriques avec cache (pour éviter un appel API supplémentaire)
-                    import time
-                    if metriques_cache["value"] is None or (time.time() - metriques_cache["timestamp"]) > 60:
-                        metriques_cache["value"] = client_api.metriques_modele()
-                        metriques_cache["timestamp"] = time.time()
-                    metriques = metriques_cache["value"]
+                    # UTILISATION DU CACHE GLOBAL POUR LES MÉTRIQUES
+                    metriques = get_metriques_cache(client_api)
                     
                     zone.controls = [
                         carte(ft.Column(blocs)),
@@ -1974,7 +2007,6 @@ def main(page: ft.Page):
                         afficher_resultats()
 
                     def charger_resultats():
-                        # Appel à simuler_dossier (sans stockage en base)
                         finaliser_et_afficher(id_client, zone_resultats)
                         resultats_charges["value"] = True
 
