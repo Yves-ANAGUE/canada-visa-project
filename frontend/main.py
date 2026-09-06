@@ -496,7 +496,7 @@ def main(page: ft.Page):
                                 width=10,
                                 color=NOIR_DOUX,
                                 border_radius=3,
-                                tooltip=f"Précision: {precision_val:.1f}%"  # ← Utiliser "Précision" avec accent
+                                tooltip=f"Precision: {precision_val:.1f}%"  # ← En anglais pour éviter les accents
                             ),
                             ft.BarChartRod(
                                 from_y=0,
@@ -504,7 +504,7 @@ def main(page: ft.Page):
                                 width=10,
                                 color=ROUGE_CANADA,
                                 border_radius=3,
-                                tooltip=f"Rappel: {recall_val:.1f}%"  # ← Utiliser "Rappel"
+                                tooltip=f"Recall: {recall_val:.1f}%"  # ← En anglais
                             ),
                             ft.BarChartRod(
                                 from_y=0,
@@ -512,13 +512,13 @@ def main(page: ft.Page):
                                 width=10,
                                 color=OR_ERABLE,
                                 border_radius=3,
-                                tooltip=f"F1: {f1_val:.1f}%"  # ← Utiliser "F1"
+                                tooltip=f"F1: {f1_val:.1f}%"  # ← En anglais
                             ),
                         ]
                     )
                 )
             
-            # Légende plus explicite avec des couleurs bien distinctes
+            # Légende avec les noms en français (pour l'affichage)
             legende = ft.Row([
                 ft.Row([ft.Container(width=16, height=16, bgcolor=NOIR_DOUX, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=ROUGE_CANADA, border_radius=4), ft.Text("Rappel", size=13, weight=ft.FontWeight.W_500)], spacing=8),
