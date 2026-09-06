@@ -469,7 +469,7 @@ def main(page: ft.Page):
 
         def construire_graphique_performance(donnees: list, label_axe: str, titre: str) -> ft.Column:
             """
-            Construit un graphique à barres groupées (Précision, Recall, F1) pour un segment donné.
+            Construit un graphique à barres groupées (Précision, Rappel, F1) pour un segment donné.
             Les labels sont tronqués pour éviter le chevauchement, la légende est agrandie.
             """
             if not donnees:
@@ -481,33 +481,38 @@ def main(page: ft.Page):
             
             groupes = []
             for i, row in df_display.iterrows():
+                # Nettoyer les valeurs pour les tooltips (éviter les problèmes d'unicode)
+                precision_val = row['precision'] * 100
+                recall_val = row['recall'] * 100
+                f1_val = row['f1'] * 100
+                
                 groupes.append(
                     ft.BarChartGroup(
                         x=i,
                         bar_rods=[
                             ft.BarChartRod(
                                 from_y=0,
-                                to_y=row['precision'] * 100,
+                                to_y=precision_val,
                                 width=10,
                                 color=NOIR_DOUX,
                                 border_radius=3,
-                                tooltip=f"Précision: {row['precision']*100:.1f}%"
+                                tooltip=f"Précision: {precision_val:.1f}%"  # ← Utiliser "Précision" avec accent
                             ),
                             ft.BarChartRod(
                                 from_y=0,
-                                to_y=row['recall'] * 100,
+                                to_y=recall_val,
                                 width=10,
                                 color=ROUGE_CANADA,
                                 border_radius=3,
-                                tooltip=f"Rappel: {row['recall']*100:.1f}%"
+                                tooltip=f"Rappel: {recall_val:.1f}%"  # ← Utiliser "Rappel"
                             ),
                             ft.BarChartRod(
                                 from_y=0,
-                                to_y=row['f1'] * 100,
+                                to_y=f1_val,
                                 width=10,
                                 color=OR_ERABLE,
                                 border_radius=3,
-                                tooltip=f"F1: {row['f1']*100:.1f}%"
+                                tooltip=f"F1: {f1_val:.1f}%"  # ← Utiliser "F1"
                             ),
                         ]
                     )
@@ -535,12 +540,12 @@ def main(page: ft.Page):
                 left_axis=ft.ChartAxis(labels_size=40),
                 bottom_axis=ft.ChartAxis(
                     labels=[ft.ChartAxisLabel(value=i, label=ft.Text(labels_display[i], size=10, max_lines=2, overflow=ft.TextOverflow.ELLIPSIS)) for i in range(len(labels_display))],
-                    labels_size=60,  # Augmenté pour éviter le chevauchement
+                    labels_size=60,
                     title=ft.Text(label_axe.capitalize(), size=10, weight=ft.FontWeight.W_600)
                 ),
                 horizontal_grid_lines=ft.ChartGridLines(color="#EDEEF1", width=1),
                 animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
-                height=320,  # Un peu plus haut pour la lisibilité
+                height=320,
             )
             
             return ft.Column([
