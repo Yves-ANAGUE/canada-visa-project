@@ -220,6 +220,24 @@ class ClientAPI:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/simuler", auth=self._auth())
             return self._traiter_reponse(r)
 
+
+    def simuler_dossier_async(self, id_client: str) -> dict:
+        """
+        Simulation RAPIDE : retourne les résultats immédiatement,
+        le diagnostic IA est généré en arrière-plan.
+        """
+        with httpx.Client(timeout=30) as client:
+            r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/simuler-async", auth=self._auth())
+            return self._traiter_reponse(r)
+
+    def get_diagnostic_status(self, id_client: str) -> dict:
+        """
+        Vérifie si le diagnostic IA est disponible pour un dossier.
+        """
+        with httpx.Client(timeout=10) as client:
+            r = client.get(f"{API_BASE_URL}/dossiers/{id_client}/diagnostic-status", auth=self._auth())
+            return self._traiter_reponse(r)
+
     # CORRECTION - lister_dossiers accepte "decision"
     
     def lister_dossiers(self, terme="", programme="", pays="", phase="", decision="") -> list:

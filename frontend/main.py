@@ -32,6 +32,9 @@ from components import (
 from theme import DRAPEAU_CANADA_URL, DRAPEAU_CAMEROUN_URL
 
 
+import time
+from datetime import datetime
+
 # Cache global des métriques du modèle (partagé entre toutes les pages)
 # Durée de validité : 1 heure (3600 secondes)
 CACHE_METRIQUES = {
@@ -45,8 +48,6 @@ def get_metriques_cache(client_api):
     Récupère les métriques du modèle avec cache global.
     Si le cache est expiré ou vide, fait un appel API.
     """
-    import time
-    
     maintenant = time.time()
     
     # Vérifier si le cache est valide
@@ -74,7 +75,6 @@ def forcer_rafraichir_cache(client_api):
     """
     Force le rafraîchissement du cache (utile après un réentraînement).
     """
-    import time
     try:
         metriques = client_api.metriques_modele()
         CACHE_METRIQUES["value"] = metriques
@@ -1664,6 +1664,10 @@ def main(page: ft.Page):
     # CORRECTION dans page_simulateur() - utilisation de l'orbe IA
     
 
+# ============================================================
+# REMPLACEZ toute la fonction page_simulateur() dans main.py
+# ============================================================
+
     def page_simulateur():
         def construire():
             champ_recherche = ft.TextField(
@@ -1674,15 +1678,71 @@ def main(page: ft.Page):
             liste_candidats = ft.Column([])
             zone_resultats = ft.Column([])
 
+            # Cache des IDs pour lesquels le diagnostic est en cours
+            diagnostics_en_cours = set()
+
+            def verifier_et_afficher_diagnostic(id_client: str, zone: ft.Column, tentatives: int = 0):
+                """
+                Vérifie périodiquement si le diagnostic IA est disponible.
+                """
+                if tentatives > 30:  # Maximum 30 tentatives (environ 30 secondes)
+                    try:
+                        # Si le diagnostic n'est pas disponible après 30s, afficher un message
+                        zone.controls[1].controls[1].value = "⏱️ Le diagnostic IA prend plus de temps que prévu. Consultez la page 'Détail du dossier' pour le résultat."
+                        zone.controls[1].controls[1].color = ORANGE_ALERTE
+                        # Changer l'icône
+                        zone.controls[1].controls[0].controls[0].icon = ft.icons.WARNING
+                        zone.controls[1].controls[0].controls[0].color = ORANGE_ALERTE
+                        page.update()
+                    except Exception:
+                        pass
+                    return
+                
+                try:
+                    status = client_api.get_diagnostic_status(id_client)
+                    if status.get("disponible") and status.get("diagnostic"):
+                        # Diagnostic disponible → mise à jour
+                        nouveau_diagnostic = status["diagnostic"]
+                        try:
+                            zone.controls[1].controls[1].value = nouveau_diagnostic
+                            zone.controls[1].controls[1].color = GRIS_TEXTE
+                            # Changer l'icône
+                            zone.controls[1].controls[0].controls[0].icon = ft.icons.CHECK_CIRCLE
+                            zone.controls[1].controls[0].controls[0].color = VERT_SUCCES
+                            diagnostics_en_cours.discard(id_client)
+                            page.update()
+                            
+                            # Notification visible
+                            page.snack_bar = ft.SnackBar(
+                                content=ft.Text("✅ Diagnostic IA disponible !", color="#FFFFFF"),
+                                bgcolor=VERT_SUCCES,
+                                duration=3000
+                            )
+                            page.snack_bar.open = True
+                            page.update()
+                        except Exception:
+                            pass
+                        return
+                    else:
+                        # Pas encore disponible → réessayer dans 1 seconde
+                        import threading
+                        threading.Timer(1.0, lambda: verifier_et_afficher_diagnostic(id_client, zone, tentatives + 1)).start()
+                except Exception as e:
+                    print(f"Erreur vérification diagnostic: {e}")
+                    # Réessayer quand même
+                    import threading
+                    threading.Timer(2.0, lambda: verifier_et_afficher_diagnostic(id_client, zone, tentatives + 1)).start()
+
             def finaliser_et_afficher(id_client: str, zone: ft.Column):
                 """Fonction callback appelée après l'animation de l'orbe IA.
-                Affiche les résultats SANS stocker en base (simulation rapide)."""
+                Utilise la simulation asynchrone pour un affichage rapide."""
                 try:
-                    complet = client_api.simuler_dossier(id_client)
+                    # Simulation RAPIDE (sans attendre le diagnostic IA)
+                    complet = client_api.simuler_dossier_async(id_client)
                     resultat = complet.get("resultat") or {}
                     scenarios = complet.get("scenarios") or []
-                    diagnostic_texte = complet.get("diagnostic_ia") or "Non disponible."
-                    erreur_simulation = complet.get("erreur_simulation")
+                    diagnostic_texte = complet.get("diagnostic_ia") or "Génération du diagnostic en cours..."
+                    diagnostic_en_cours = complet.get("diagnostic_en_cours", False)
 
                     blocs = [
                         ft.Row([
@@ -1717,7 +1777,7 @@ def main(page: ft.Page):
                             ft.Row([
                                 ft.Icon(ft.icons.INFO_OUTLINE, color=GRIS_MOYEN, size=16),
                                 ft.Text(
-                                    "Note : Les gains sont des estimations individuelles, une modification à la fois, en partant du profil actuel.",
+                                    "Note : Les gains sont des estimations individuelles, une modification à la fois.",
                                     size=12,
                                     color=GRIS_MOYEN,
                                     italic=True,
@@ -1728,22 +1788,33 @@ def main(page: ft.Page):
                     else:
                         blocs.append(
                             ft.Text(
-                                erreur_simulation or "Simulation indisponible.",
-                                color=ORANGE_ALERTE,
+                                "Aucun scénario d'amélioration identifié.",
+                                color=GRIS_MOYEN,
                                 size=12
                             )
                         )
 
-                    # UTILISATION DU CACHE GLOBAL POUR LES MÉTRIQUES
                     metriques = get_metriques_cache(client_api)
+                    
+                    # Ajouter une indication si le diagnostic est en cours
+                    if diagnostic_en_cours:
+                        diagnostics_en_cours.add(id_client)
+                        diagnostic_couleur = ORANGE_ALERTE
+                        diagnostic_icone = ft.icons.HOURGLASS_TOP
+                    else:
+                        diagnostic_couleur = GRIS_TEXTE
+                        diagnostic_icone = ft.icons.CHECK_CIRCLE
                     
                     zone.controls = [
                         carte(ft.Column(blocs)),
                         ft.Container(height=16),
                         carte(
                             ft.Column([
-                                ft.Text("Diagnostic Data Analyst (IA)", size=15, weight=ft.FontWeight.BOLD),
-                                ft.Text(diagnostic_texte, size=13)
+                                ft.Row([
+                                    ft.Icon(diagnostic_icone, color=diagnostic_couleur, size=18),
+                                    ft.Text("Diagnostic Data Analyst (IA)", size=15, weight=ft.FontWeight.BOLD),
+                                ], spacing=8),
+                                ft.Text(diagnostic_texte, size=13, color=diagnostic_couleur),
                             ])
                         ),
                         ft.Container(height=16),
@@ -1765,6 +1836,11 @@ def main(page: ft.Page):
                         ),
                     ]
                     page.update()
+                    
+                    # Si le diagnostic est en cours, lancer la vérification périodique
+                    if diagnostic_en_cours:
+                        verifier_et_afficher_diagnostic(id_client, zone)
+                    
                 except ErreurAPI as err:
                     zone.controls = [ft.Text(f"Erreur : {err.message}", color=ROUGE_CANADA)]
                     page.update()
@@ -1950,7 +2026,6 @@ def main(page: ft.Page):
                                 pass
 
                     def animer():
-                        import time
                         import math
                         
                         stack = overlay.content.controls[1].content.controls[1].controls[0]
@@ -1965,11 +2040,7 @@ def main(page: ft.Page):
                         temps_par_etape = 0.6
                         
                         i = 0
-                        angle = 0
                         while not resultats_charges["value"]:
-                            # Effet tourbillon : rotation
-                            angle += 0.12
-                            
                             # Changement des couleurs de l'orbe
                             couleurs = couleurs_tourbillon[i % len(couleurs_tourbillon)]
                             orbe.gradient = ft.RadialGradient(
@@ -1981,7 +2052,7 @@ def main(page: ft.Page):
                             # Pulsation de l'orbe
                             orbe.scale = 1.15 + 0.08 * math.sin(i * 0.3)
                             
-                            # Anneaux qui tournent en sens opposés
+                            # Anneaux
                             anneau1.scale = 1.0 + 0.04 * math.sin(i * 0.15)
                             anneau2.scale = 1.0 + 0.03 * math.sin(i * 0.2 + 1)
                             anneau3.scale = 1.0 + 0.02 * math.sin(i * 0.25 + 0.5)
