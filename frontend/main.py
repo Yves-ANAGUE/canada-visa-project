@@ -1745,27 +1745,47 @@ def main(page: ft.Page):
 
             def forcer_rafraichir_diagnostic(id_client: str):
                 def handler(e):
+                    # Désactiver le bouton pendant la récupération
+                    bouton_rafraichir = e.control
+                    bouton_rafraichir.disabled = True
+                    bouton_rafraichir.icon = ft.icons.HOURGLASS_TOP
+                    page.update()
+                    
                     try:
-                        notification(page, "Récupération du diagnostic en cours...", succes=True)
-                        status = client_api.get_diagnostic_status(id_client)
-                        if status.get("disponible") and status.get("diagnostic"):
+                        notification(page, "Régénération du diagnostic en cours...", succes=True)
+                        
+                        # Appeler l'API pour régénérer (stocke en base)
+                        reponse = client_api.regenerer_diagnostic(id_client)
+                        
+                        # La réponse contient directement le nouveau diagnostic
+                        nouveau_diagnostic = reponse.get("diagnostic_ia")
+                        
+                        if nouveau_diagnostic and nouveau_diagnostic != "Diagnostic non disponible.":
                             # Mettre à jour l'affichage
                             if id_client in controles_diagnostic:
                                 texte_diag = controles_diagnostic[id_client]["texte"]
                                 icone_diag = controles_diagnostic[id_client]["icone"]
-                                texte_diag.value = status["diagnostic"]
+                                texte_diag.value = nouveau_diagnostic
                                 texte_diag.color = GRIS_TEXTE
                                 icone_diag.icon = ft.icons.CHECK_CIRCLE
                                 icone_diag.color = VERT_SUCCES
                                 page.update()
-                                notification(page, "Diagnostic récupéré !", succes=True)
+                                notification(page, "✅ Diagnostic régénéré avec succès !", succes=True)
                             else:
-                                # Recharger toute la simulation
+                                # Fallback : recharger toute la simulation
                                 finaliser_et_afficher(id_client, zone_resultats)
                         else:
-                            notification(page, "Diagnostic pas encore disponible, réessayez dans quelques secondes.", succes=False)
+                            notification(page, "⚠️ Le diagnostic n'a pas pu être régénéré. Réessayez.", succes=False)
+                        
+                    except ErreurAPI as err:
+                        notification(page, f"Erreur : {err.message}", succes=False)
                     except Exception as err:
                         notification(page, f"Erreur : {err}", succes=False)
+                    finally:
+                        # Réactiver le bouton
+                        bouton_rafraichir.disabled = False
+                        bouton_rafraichir.icon = ft.icons.REFRESH
+                        page.update()
                 return handler
 
             def finaliser_et_afficher(id_client: str, zone: ft.Column):

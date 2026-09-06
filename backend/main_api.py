@@ -611,8 +611,17 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
     diagnostic_texte = None
     if not force:
         diagnostic_texte = dossier.get("diagnostic_ia_texte")
-        if diagnostic_texte:
+        if diagnostic_texte and diagnostic_texte != "":
             logger.info(f"Diagnostic récupéré du cache pour {id_client} (table {table})")
+            # On retourne directement avec le diagnostic existant
+            resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
+            scenarios = []
+            try:
+                simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
+                scenarios = simulation['scenarios_ameliorations']
+            except Exception as e:
+                logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
+            return dossier, resultat, diagnostic_texte, scenarios, None
     
     resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
     
@@ -625,7 +634,7 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
         scenarios = []
     
     # Si pas de diagnostic (ou force=True), on génère
-    if force or diagnostic_texte is None:
+    if force or diagnostic_texte is None or diagnostic_texte == "":
         try:
             top_df = etat_application.get('feature_importance')
             diagnostic_texte = generer_diagnostic_openrouter(
@@ -637,7 +646,7 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
                 decision_reelle=dossier.get('visa_decision') if est_archive else None
             )
             # Stocker en base UNIQUEMENT si demandé
-            if stocker_en_base:
+            if stocker_en_base and diagnostic_texte and diagnostic_texte != "":
                 engine = etat_application['engine']
                 with engine.connect() as conn:
                     conn.execute(text(
@@ -645,6 +654,8 @@ def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bo
                     ), {"diag": diagnostic_texte, "id": id_client})
                     conn.commit()
                 logger.info(f"Diagnostic généré et stocké pour {id_client} dans {table}")
+            elif stocker_en_base:
+                logger.warning(f"Diagnostic vide pour {id_client}, non stocké")
         except Exception as e:
             logger.error(f"Erreur diagnostic IA {id_client} : {e}", exc_info=True)
             diagnostic_texte = "Diagnostic IA temporairement indisponible (probleme de connexion au service)."
@@ -658,7 +669,13 @@ def regenerer_diagnostic(id_client: str, agent: dict = Depends(verifier_identifi
     met à jour la base et retourne le nouveau diagnostic.
     """
     # Utiliser force=True ET stocker_en_base=True pour régénérer ET stocker
-    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client, force=True, stocker_en_base=True)
+    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(
+        id_client, force=True, stocker_en_base=True
+    )
+    
+    # Vérifier que le diagnostic a bien été stocké
+    logger.info(f"Diagnostic régénéré pour {id_client}, longueur: {len(diagnostic) if diagnostic else 0}")
+    
     return {
         "diagnostic_ia": diagnostic,
         "resultat": resultat,
@@ -1430,7 +1447,7 @@ import os
 def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identifiants)):
     """
     Simulation RAPIDE qui retourne les résultats SANS attendre le diagnostic IA.
-    Le diagnostic IA est généré en arrière-plan (non bloquant).
+    Le diagnostic IA est généré en arrière-plan (non bloquant) et STOCKÉ en base.
     """
     # Récupérer le dossier
     dossier = obtenir_dossier(id_client, agent={"identifiant_conseiller": "system"})
@@ -1449,10 +1466,29 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
         logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
         scenarios = []
     
-    # 3. Diagnostic IA temporaire (message de chargement)
-    diagnostic_temp = "🤖 Génération du diagnostic IA en cours... Les résultats détaillés seront disponibles dans quelques secondes."
+    # 3. Vérifier si un diagnostic existe déjà en base
+    engine = etat_application['engine']
+    with engine.connect() as conn:
+        existing = conn.execute(text(
+            f"SELECT diagnostic_ia_texte FROM {table} WHERE id_client = :id"
+        ), {"id": id_client}).fetchone()
+        diagnostic_existant = existing[0] if existing else None
     
-    # 4. Lancer la génération du diagnostic IA en arrière-plan (non bloquant)
+    if diagnostic_existant:
+        # Si un diagnostic existe déjà, on le réutilise immédiatement
+        logger.info(f"Diagnostic existant trouvé pour {id_client}, réutilisation")
+        return {
+            "diagnostic_ia": diagnostic_existant,
+            "diagnostic_en_cours": False,
+            "resultat": resultat,
+            "scenarios": scenarios,
+            "dossier": dossier
+        }
+    
+    # 4. Sinon, diagnostic temporaire (message de chargement)
+    diagnostic_temp = "Génération du diagnostic IA en cours... Les résultats détaillés seront disponibles dans quelques secondes."
+    
+    # 5. Lancer la génération du diagnostic IA en arrière-plan (non bloquant)
     def generer_diagnostic_en_arriere_plan():
         try:
             # Récupérer les top features
@@ -1471,6 +1507,7 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
             # Stocker en base
             engine = etat_application['engine']
             with engine.connect() as conn:
+                # Utiliser UPDATE avec vérification que la ligne existe
                 conn.execute(text(
                     f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
                 ), {"diag": diagnostic_complet, "id": id_client})
@@ -1494,7 +1531,6 @@ def simuler_dossier_async(id_client: str, agent: dict = Depends(verifier_identif
         "dossier": dossier
     }
 
-
 @app.get("/dossiers/{id_client}/diagnostic-status")
 def get_diagnostic_status(id_client: str, agent: dict = Depends(verifier_identifiants)):
     """
@@ -1510,12 +1546,14 @@ def get_diagnostic_status(id_client: str, agent: dict = Depends(verifier_identif
             ), {"id": id_client}).fetchone()
             if result:
                 diag = result[0]
+                # Retourner le diagnostic même s'il est NULL
                 return {
-                    "disponible": diag is not None,
-                    "diagnostic": diag
+                    "disponible": diag is not None and diag != "",
+                    "diagnostic": diag,
+                    "table": table
                 }
     
-    return {"disponible": False, "diagnostic": None}
+    return {"disponible": False, "diagnostic": None, "table": None}
 
 # Pour Vercel - le point d'entrée
 app = app
