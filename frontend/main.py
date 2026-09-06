@@ -1158,24 +1158,33 @@ def main(page: ft.Page):
                 dialogue.open = True
                 page.update()
             
+
+
             def action_regenerer_diagnostic(e):
                 try:
+                    # Afficher un indicateur de chargement
+                    notification(page, "Régénération du diagnostic en cours...", succes=True)
+                    
                     # L'appel POST retourne directement le nouveau diagnostic
                     reponse = client_api.regenerer_diagnostic(id_client)
-                    notification(page, "Diagnostic régénéré avec succès.")
                     
-                    # Mise à jour immédiate de l'affichage sans recharger la page
+                    # Mise à jour immédiate de l'affichage
                     nouveau_diagnostic = reponse.get("diagnostic_ia", "Diagnostic non disponible.")
                     nouveaux_scenarios = reponse.get("scenarios", [])
                     nouveau_resultat = reponse.get("resultat", {})
                     
-                    # Mettre à jour les contrôles existants
-                    # On va chercher les éléments par leurs références ou utiliser un Refresh
-                    # La méthode la plus simple : recharger le contenu du dossier
-                    # Mais on va le faire proprement en utilisant les containers
+                    # Reconstruire la vue actuelle pour rafraîchir le contenu
+                    # On récupère la vue actuelle
+                    vue_actuelle = page.views[-1] if page.views else None
+                    if vue_actuelle and vue_actuelle.route == f"/dossier/{id_client}":
+                        # Recréer la vue avec les nouvelles données
+                        page.views[-1] = page_detail_dossier(id_client)
+                        page.update()
+                    else:
+                        # Fallback : navigation
+                        page.go(f"/dossier/{id_client}")
                     
-                    # Solution : on recharger la page entière (le plus fiable)
-                    page.go(f"/dossier/{id_client}")
+                    notification(page, "Diagnostic régénéré avec succès.")
                     
                 except ErreurAPI as err:
                     notification(page, f"Erreur : {err.message}", succes=False)            
@@ -1620,10 +1629,18 @@ def main(page: ft.Page):
             liste_candidats = ft.Column([])
             zone_resultats = ft.Column([])
 
+# ============================================================
+# REMPLACEZ cette fonction dans main.py (page_simulateur)
+# ============================================================
+
+            # Cache des métriques pour éviter un appel API supplémentaire
+            metriques_cache = {"value": None, "timestamp": None}
+            
             def finaliser_et_afficher(id_client: str, zone: ft.Column):
                 """Fonction callback appelée après l'animation de l'orbe IA.
                    Affiche les résultats SANS stocker en base (simulation rapide)."""
                 try:
+                    # Récupérer les résultats de la simulation
                     complet = client_api.simuler_dossier(id_client)
                     resultat = complet.get("resultat") or {}
                     scenarios = complet.get("scenarios") or []
@@ -1663,8 +1680,7 @@ def main(page: ft.Page):
                             ft.Row([
                                 ft.Icon(ft.icons.INFO_OUTLINE, color=GRIS_MOYEN, size=16),
                                 ft.Text(
-                                    "Note : Les gains sont des estimations individuelles, une modification à la fois, en partant du profil actuel."
-                                    "L'effet combiné de plusieurs modifications peut être différent (interactions non-linéaires).",
+                                    "Note : Les gains sont des estimations individuelles, une modification à la fois, en partant du profil actuel.",
                                     size=12,
                                     color=GRIS_MOYEN,
                                     italic=True,
@@ -1681,7 +1697,12 @@ def main(page: ft.Page):
                             )
                         )
 
-                    metriques = client_api.metriques_modele()
+                    # Récupérer les métriques avec cache (pour éviter un appel API supplémentaire)
+                    import time
+                    if metriques_cache["value"] is None or (time.time() - metriques_cache["timestamp"]) > 60:
+                        metriques_cache["value"] = client_api.metriques_modele()
+                        metriques_cache["timestamp"] = time.time()
+                    metriques = metriques_cache["value"]
                     
                     zone.controls = [
                         carte(ft.Column(blocs)),

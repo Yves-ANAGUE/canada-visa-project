@@ -667,6 +667,10 @@ def regenerer_diagnostic(id_client: str, agent: dict = Depends(verifier_identifi
     }
 
 # Ajout de la route de simulation avec mise à jour du diagnostic
+# ============================================================
+# REMPLACEZ cette fonction dans main_api.py
+# ============================================================
+
 @app.post("/dossiers/{id_client}/simuler")
 def simuler_dossier(id_client: str, agent: dict = Depends(verifier_identifiants)):
     """
@@ -678,11 +682,12 @@ def simuler_dossier(id_client: str, agent: dict = Depends(verifier_identifiants)
         id_client, force=True, stocker_en_base=False
     )
     
-    # On recalcule les scénarios pour être sûr
+    # On recalcule les scénarios pour être sûr (LIMITÉ à 5 pour plus de rapidité)
     try:
         profil = nettoyer_decimals({c: dossier.get(c) for c in COLONNES_BRUTES_ATTENDUES})
         simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
-        scenarios = simulation['scenarios_ameliorations']
+        # Limiter à 5 scénarios pour le simulateur (plus rapide)
+        scenarios = simulation['scenarios_ameliorations'][:5]
     except Exception as e:
         logger.error(f"Erreur simulateur {id_client} : {e}", exc_info=True)
         scenarios = []
