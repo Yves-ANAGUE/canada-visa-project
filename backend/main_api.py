@@ -593,10 +593,11 @@ def endpoint_simulateur(profil: ProfilCandidat, agent: dict = Depends(verifier_i
 # CORRECTION dans main_api.py - simplifie _construire_rapport,
 # supprime le "gate" bloquant, appelle toujours predire_client
 
-def _construire_rapport(id_client: str, force: bool = False):
+def _construire_rapport(id_client: str, force: bool = False, stocker_en_base: bool = True):
     """
     Récupère le dossier (actif ou archive) et son diagnostic.
     Si force=True, régénère le diagnostic même s'il existe déjà en base.
+    Si stocker_en_base=False, ne stocke PAS le diagnostic en base (pour simulateur rapide).
     Retourne : dossier, resultat_prediction, diagnostic_texte, scenarios, erreur_simulation
     """
     dossier = obtenir_dossier(id_client, agent={"identifiant_conseiller": "system"})
@@ -612,9 +613,6 @@ def _construire_rapport(id_client: str, force: bool = False):
         diagnostic_texte = dossier.get("diagnostic_ia_texte")
         if diagnostic_texte:
             logger.info(f"Diagnostic récupéré du cache pour {id_client} (table {table})")
-            # On peut retourner directement, mais il faut quand même les autres données
-            # On va quand même calculer les métriques, prédiction, simulateur...
-            # Mais on peut sauter la génération OpenRouter.
     
     resultat = predire_client(profil, etat_application['modele'], etat_application['seuil'])
     
@@ -638,14 +636,15 @@ def _construire_rapport(id_client: str, force: bool = False):
                 est_archive=est_archive,
                 decision_reelle=dossier.get('visa_decision') if est_archive else None
             )
-            # Stocker en base
-            engine = etat_application['engine']
-            with engine.connect() as conn:
-                conn.execute(text(
-                    f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
-                ), {"diag": diagnostic_texte, "id": id_client})
-                conn.commit()
-            logger.info(f"Diagnostic généré et stocké pour {id_client} dans {table}")
+            # Stocker en base UNIQUEMENT si demandé
+            if stocker_en_base:
+                engine = etat_application['engine']
+                with engine.connect() as conn:
+                    conn.execute(text(
+                        f"UPDATE {table} SET diagnostic_ia_texte = :diag WHERE id_client = :id"
+                    ), {"diag": diagnostic_texte, "id": id_client})
+                    conn.commit()
+                logger.info(f"Diagnostic généré et stocké pour {id_client} dans {table}")
         except Exception as e:
             logger.error(f"Erreur diagnostic IA {id_client} : {e}", exc_info=True)
             diagnostic_texte = "Diagnostic IA temporairement indisponible (probleme de connexion au service)."
@@ -658,20 +657,28 @@ def regenerer_diagnostic(id_client: str, agent: dict = Depends(verifier_identifi
     Force la régénération du diagnostic IA pour un dossier (actif ou archive),
     met à jour la base et retourne le nouveau diagnostic.
     """
-    # Utiliser force=True pour régénérer
-    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client, force=True)
-    return {"diagnostic_ia": diagnostic, "resultat": resultat, "scenarios": scenarios}
+    # Utiliser force=True ET stocker_en_base=True pour régénérer ET stocker
+    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client, force=True, stocker_en_base=True)
+    return {
+        "diagnostic_ia": diagnostic,
+        "resultat": resultat,
+        "scenarios": scenarios,
+        "dossier": dossier
+    }
 
 # Ajout de la route de simulation avec mise à jour du diagnostic
 @app.post("/dossiers/{id_client}/simuler")
 def simuler_dossier(id_client: str, agent: dict = Depends(verifier_identifiants)):
     """
     Simule l'optimisation pour un dossier existant, régénère le diagnostic
-    et met à jour la base.
+    SANS le stocker en base pour un affichage plus rapide.
     """
-    # On régénère d'abord le diagnostic (force=True)
-    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client, force=True)
-    # On a déjà les scénarios, mais on peut les recalculer pour être sûr
+    # On régénère le diagnostic sans le stocker en base (stocker_en_base=False)
+    dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(
+        id_client, force=True, stocker_en_base=False
+    )
+    
+    # On recalcule les scénarios pour être sûr
     try:
         profil = nettoyer_decimals({c: dossier.get(c) for c in COLONNES_BRUTES_ATTENDUES})
         simulation = simuler_optimisation(profil, etat_application['modele'], etat_application['seuil'])
@@ -747,8 +754,8 @@ def _envoyer_email_complet(id_client: str, email_destinataire: str):
     logger = logging.getLogger('main_api')
     
     try:
-        # 1. Construire le rapport (tout le lourd)
-        dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client)
+        # 1. Construire le rapport (avec stockage en base car c'est pour l'email)
+        dossier, resultat, diagnostic, scenarios, _ = _construire_rapport(id_client, stocker_en_base=True)
         
         # 2. Récupérer les métriques
         metriques = endpoint_metriques_modele(agent={"identifiant_conseiller": "system"})

@@ -1160,10 +1160,23 @@ def main(page: ft.Page):
             
             def action_regenerer_diagnostic(e):
                 try:
+                    # L'appel POST retourne directement le nouveau diagnostic
                     reponse = client_api.regenerer_diagnostic(id_client)
                     notification(page, "Diagnostic régénéré avec succès.")
-                    # Recharger la page pour afficher le nouveau diagnostic
+                    
+                    # Mise à jour immédiate de l'affichage sans recharger la page
+                    nouveau_diagnostic = reponse.get("diagnostic_ia", "Diagnostic non disponible.")
+                    nouveaux_scenarios = reponse.get("scenarios", [])
+                    nouveau_resultat = reponse.get("resultat", {})
+                    
+                    # Mettre à jour les contrôles existants
+                    # On va chercher les éléments par leurs références ou utiliser un Refresh
+                    # La méthode la plus simple : recharger le contenu du dossier
+                    # Mais on va le faire proprement en utilisant les containers
+                    
+                    # Solution : on recharger la page entière (le plus fiable)
                     page.go(f"/dossier/{id_client}")
+                    
                 except ErreurAPI as err:
                     notification(page, f"Erreur : {err.message}", succes=False)            
 
@@ -1608,7 +1621,8 @@ def main(page: ft.Page):
             zone_resultats = ft.Column([])
 
             def finaliser_et_afficher(id_client: str, zone: ft.Column):
-                """Fonction callback appelée après l'animation de l'orbe IA."""
+                """Fonction callback appelée après l'animation de l'orbe IA.
+                   Affiche les résultats SANS stocker en base (simulation rapide)."""
                 try:
                     complet = client_api.simuler_dossier(id_client)
                     resultat = complet.get("resultat") or {}
@@ -1703,9 +1717,7 @@ def main(page: ft.Page):
 
             def lancer_simulation_pour(id_client):
                 def handler(e):
-                    
                     # OVERLAY AVEC FOND SEMI-TRANSPARENT + FLOU LÉGER
-                    
                     overlay = ft.Container(
                         content=ft.Stack(
                             controls=[
@@ -1941,6 +1953,7 @@ def main(page: ft.Page):
                         afficher_resultats()
 
                     def charger_resultats():
+                        # Appel à simuler_dossier (sans stockage en base)
                         finaliser_et_afficher(id_client, zone_resultats)
                         resultats_charges["value"] = True
 

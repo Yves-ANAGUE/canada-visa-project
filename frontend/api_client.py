@@ -209,12 +209,14 @@ class ClientAPI:
 
     
     def regenerer_diagnostic(self, id_client: str) -> dict:
-        with httpx.Client(timeout=60) as client:
+        """Régénère le diagnostic IA et le stocke en base, retourne le résultat complet."""
+        with httpx.Client(timeout=120) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/regenerer-diagnostic", auth=self._auth())
             return self._traiter_reponse(r)
 
     def simuler_dossier(self, id_client: str) -> dict:
-        with httpx.Client(timeout=60) as client:
+        """Simule l'optimisation et génère le diagnostic SANS le stocker en base (plus rapide)."""
+        with httpx.Client(timeout=120) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/simuler", auth=self._auth())
             return self._traiter_reponse(r)
 
