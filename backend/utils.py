@@ -632,34 +632,16 @@ import base64
 
 # backend/utils.py - Remplacer envoyer_email_pdf()
 
+# backend/utils.py - Remplacer envoyer_email_pdf()
+
 def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: bytes, nom_fichier: str):
     logger = logging.getLogger('main_api')
     
-    # Vérifier si on est en local (présence des variables Gmail)
-    gmail_address = os.environ.get('GMAIL_ADDRESS')
-    gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
+    # Détecter l'environnement
+    # En production (Render), la variable RENDER est définie automatiquement
+    is_production = os.environ.get('RENDER') is not None
     
-    if gmail_address and gmail_password:
-        # === MODE LOCAL : GMAIL ===
-        logger.info("Envoi via Gmail (mode local)")
-        try:
-            msg = EmailMessage()
-            msg['Subject'] = sujet
-            msg['From'] = gmail_address
-            msg['To'] = destinataire
-            msg.set_content(corps)
-            msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=nom_fichier)
-            
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-                server.login(gmail_address, gmail_password)
-                server.send_message(msg)
-            
-            logger.info(f"Email envoyé à {destinataire} via Gmail")
-            return {"status": "success"}
-        except Exception as e:
-            logger.error(f"Erreur Gmail : {e}")
-            raise
-    else:
+    if is_production:
         # === MODE PRODUCTION : BREVO ===
         logger.info("Envoi via Brevo (mode production)")
         
@@ -667,9 +649,9 @@ def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: byte
         expediteur = os.environ.get('BREVO_SENDER_EMAIL')
         
         if not api_key:
-            raise ValueError("BREVO_API_KEY non définie")
+            raise ValueError("BREVO_API_KEY non définie dans l'environnement")
         if not expediteur:
-            raise ValueError("BREVO_SENDER_EMAIL non définie")
+            raise ValueError("BREVO_SENDER_EMAIL non définie dans l'environnement")
 
         pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
         data = {
@@ -685,12 +667,38 @@ def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: byte
         try:
             response = requests.post("https://api.brevo.com/v3/smtp/email", json=data, headers=headers, timeout=30)
             response.raise_for_status()
-            logger.info(f"Email envoyé à {destinataire} via Brevo")
+            logger.info(f"Email envoyé avec succès à {destinataire} via Brevo")
             return response.json()
         except Exception as e:
             logger.error(f"Erreur Brevo : {e}")
             raise
-
+    else:
+        # === MODE LOCAL : GMAIL ===
+        logger.info("📧 Envoi via Gmail (mode local)")
+        
+        gmail_address = os.environ.get('GMAIL_ADDRESS')
+        gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
+        
+        if not gmail_address or not gmail_password:
+            raise ValueError("GMAIL_ADDRESS et GMAIL_APP_PASSWORD doivent être définis pour le mode local")
+        
+        try:
+            msg = EmailMessage()
+            msg['Subject'] = sujet
+            msg['From'] = gmail_address
+            msg['To'] = destinataire
+            msg.set_content(corps)
+            msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=nom_fichier)
+            
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(gmail_address, gmail_password)
+                server.send_message(msg)
+            
+            logger.info(f"Email envoyé avec succès à {destinataire} via Gmail")
+            return {"status": "success"}
+        except Exception as e:
+            logger.error(f"Erreur Gmail : {e}")
+            raise
 
 # A ajouter dans utils.py - detection de completude du profil
 
