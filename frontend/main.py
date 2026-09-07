@@ -83,6 +83,46 @@ def forcer_rafraichir_cache(client_api):
     except Exception as e:
         return CACHE_METRIQUES["value"]
 
+# frontend/main.py - Ajouter après CACHE_METRIQUES
+
+# Cache global pour le tableau de bord (durée : 1 heure)
+CACHE_DASHBOARD = {
+    "value": None,
+    "timestamp": None,
+    "ttl": 3600  # 1 heure
+}
+
+def get_dashboard_cache(client_api):
+    """
+    Récupère les données du dashboard avec cache global.
+    Si le cache est expiré ou vide, retourne None.
+    """
+    import time
+    maintenant = time.time()
+    
+    if (CACHE_DASHBOARD["value"] is not None and 
+        CACHE_DASHBOARD["timestamp"] is not None and
+        (maintenant - CACHE_DASHBOARD["timestamp"]) < CACHE_DASHBOARD["ttl"]):
+        print("Dashboard : utilisation du cache")
+        return CACHE_DASHBOARD["value"]
+    
+    print("Dashboard : cache expiré ou vide")
+    return None
+
+def set_dashboard_cache(data):
+    """Met à jour le cache du dashboard."""
+    import time
+    CACHE_DASHBOARD["value"] = data
+    CACHE_DASHBOARD["timestamp"] = time.time()
+    print("Dashboard : cache mis à jour")
+
+def forcer_rafraichir_cache_dashboard(client_api, page):
+    """Force le rafraîchissement du cache dashboard."""
+    CACHE_DASHBOARD["value"] = None
+    CACHE_DASHBOARD["timestamp"] = None
+    notification(page, "Rafraîchissement du tableau de bord...", succes=True)
+    page.go("/dashboard")
+
 # CORRECTION dans main.py - remplace toute la logique de navigation
 
 def main(page: ft.Page):
@@ -335,9 +375,27 @@ def main(page: ft.Page):
     
     
     # REMPLACE entierement le construire() de page_dashboard()
-    
-    def page_dashboard():
-        def construire_graphique_importance(donnees: list) -> ft.Column:
+    # frontend/main.py - Ajouter avant page_dashboard()
+
+    def construire_dashboard_avec_donnees(donnees):
+        """Construit le dashboard avec les données fournies (depuis le cache)."""
+        
+        # Extraire les données du cache
+        importance = donnees["importance"]
+        stats = donnees["stats"]
+        metriques = donnees["metriques"]
+        pays_data = donnees["pays_data"]
+        secteur_data = donnees["secteur_data"]
+        education_data = donnees["education_data"]
+        decision_data = donnees["decision_data"]
+        perf_programme = donnees["perf_programme"]
+        perf_secteur = donnees["perf_secteur"]
+        perf_education = donnees["perf_education"]
+        perf_francophone = donnees["perf_francophone"]
+        perf_pays = donnees["perf_pays"]
+        
+        # Fonctions de graphiques (copiées de ton dashboard existant)
+        def construire_graphique_importance(donnees):
             couleurs_cycle = [ROUGE_CANADA, "#111318", "#8A8F98", "#E08A00", "#1E8E5A"]
             groupes = []
             legende = []
@@ -379,7 +437,7 @@ def main(page: ft.Page):
 
             return ft.Column([graphique, ft.Container(height=10), ft.Column(legende, spacing=6, scroll=ft.ScrollMode.AUTO, height=180)])
 
-        def construire_courbe_taux(donnees: list) -> ft.LineChart:
+        def construire_courbe_taux(donnees):
             points = [
                 ft.LineChartDataPoint(i, float(item["taux_acceptation"] or 0))
                 for i, item in enumerate(donnees)
@@ -414,7 +472,7 @@ def main(page: ft.Page):
                 height=280,
             )
 
-        def construire_camembert_programmes(donnees: list) -> ft.PieChart:
+        def construire_camembert_programmes(donnees):
             couleurs_cycle = [ROUGE_CANADA, "#111318", "#8A8F98", "#E08A00"]
             sections = []
             total = sum(item["total"] for item in donnees) or 1
@@ -460,72 +518,32 @@ def main(page: ft.Page):
                 )
             return ft.Column(lignes, spacing=10)
 
-        def texte_metriques(m: dict) -> str:
-            if not m or m.get('accuracy') is None:
-                return "Metriques du modele non disponibles."
-            return (f"Accuracy {float(m['accuracy'])*100:.1f}% - Precision {float(m['precision_score'])*100:.1f}% - "
-                    f"Recall {float(m['recall_score'])*100:.1f}% - Specificity {float(m.get('specificity_score') or 0)*100:.1f}% - "
-                    f"F1-Score {float(m['f1_score'])*100:.1f}% - ROC-AUC {float(m['roc_auc']):.4f}")
-
-        def construire_graphique_performance(donnees: list, label_axe: str, titre: str) -> ft.Column:
-            """
-            Construit un graphique à barres groupées (Précision, Rappel, F1) pour un segment donné.
-            Les labels sont tronqués pour éviter le chevauchement, la légende est agrandie.
-            """
+        def construire_graphique_performance(donnees, label_axe, titre):
             if not donnees:
                 return ft.Text("Aucune donnée disponible", size=12, color=GRIS_MOYEN)
-            
             import pandas as pd
             df_display = pd.DataFrame(donnees)
             df_display = df_display.sort_values('f1', ascending=False)
-            
             groupes = []
             for i, row in df_display.iterrows():
-                # Nettoyer les valeurs pour les tooltips (éviter les problèmes d'unicode)
                 precision_val = row['precision'] * 100
                 recall_val = row['recall'] * 100
                 f1_val = row['f1'] * 100
-                
                 groupes.append(
                     ft.BarChartGroup(
                         x=i,
                         bar_rods=[
-                            ft.BarChartRod(
-                                from_y=0,
-                                to_y=precision_val,
-                                width=10,
-                                color=NOIR_DOUX,
-                                border_radius=3,
-                                tooltip=f"Precision: {precision_val:.1f}%"  # ← En anglais pour éviter les accents
-                            ),
-                            ft.BarChartRod(
-                                from_y=0,
-                                to_y=recall_val,
-                                width=10,
-                                color=ROUGE_CANADA,
-                                border_radius=3,
-                                tooltip=f"Recall: {recall_val:.1f}%"  # ← En anglais
-                            ),
-                            ft.BarChartRod(
-                                from_y=0,
-                                to_y=f1_val,
-                                width=10,
-                                color=OR_ERABLE,
-                                border_radius=3,
-                                tooltip=f"F1: {f1_val:.1f}%"  # ← En anglais
-                            ),
+                            ft.BarChartRod(from_y=0, to_y=precision_val, width=10, color=NOIR_DOUX, border_radius=3, tooltip=f"Precision: {precision_val:.1f}%"),
+                            ft.BarChartRod(from_y=0, to_y=recall_val, width=10, color=ROUGE_CANADA, border_radius=3, tooltip=f"Recall: {recall_val:.1f}%"),
+                            ft.BarChartRod(from_y=0, to_y=f1_val, width=10, color=OR_ERABLE, border_radius=3, tooltip=f"F1: {f1_val:.1f}%"),
                         ]
                     )
                 )
-            
-            # Légende avec les noms en français (pour l'affichage)
             legende = ft.Row([
                 ft.Row([ft.Container(width=16, height=16, bgcolor=NOIR_DOUX, border_radius=4), ft.Text("Précision", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=ROUGE_CANADA, border_radius=4), ft.Text("Rappel", size=13, weight=ft.FontWeight.W_500)], spacing=8),
                 ft.Row([ft.Container(width=16, height=16, bgcolor=OR_ERABLE, border_radius=4), ft.Text("F1", size=13, weight=ft.FontWeight.W_500)], spacing=8),
             ], spacing=24)
-            
-            # Troncature des labels longs (max 12 caractères)
             labels = [row[label_axe] for _, row in df_display.iterrows()]
             labels_display = []
             for l in labels:
@@ -533,7 +551,6 @@ def main(page: ft.Page):
                     labels_display.append(l[:12] + "…")
                 else:
                     labels_display.append(l)
-            
             graphique = ft.BarChart(
                 bar_groups=groupes,
                 border=ft.border.all(1, "#E5E7EB"),
@@ -547,201 +564,241 @@ def main(page: ft.Page):
                 animate=ft.Animation(500, ft.AnimationCurve.EASE_OUT),
                 height=320,
             )
-            
-            return ft.Column([
-                ft.Text(titre, size=14, weight=ft.FontWeight.W_600),
-                graphique,
-                ft.Container(height=8),
-                legende
-            ], spacing=4)
+            return ft.Column([ft.Text(titre, size=14, weight=ft.FontWeight.W_600), graphique, ft.Container(height=8), legende], spacing=4)
 
+        # Construction du dashboard
+        repartition = stats["repartition_par_programme"]
+        total_dossiers = sum(item["total"] for item in repartition)
+        taux_annees = [float(item["taux_acceptation"] or 0) for item in stats["taux_acceptation_par_annee"]]
+        taux_moyen = sum(taux_annees) / len(taux_annees) if taux_annees else 0
+
+        def carte_kpi(titre, valeur, icone, couleur):
+            return carte(
+                ft.Column([
+                    ft.Row([ft.Icon(icone, color=couleur, size=22), ft.Text(titre, size=12, color=GRIS_MOYEN)], spacing=8),
+                    ft.Text(valeur, size=22, weight=ft.FontWeight.BOLD, color=GRIS_TEXTE),
+                ], spacing=6),
+                largeur=230,
+                padding_val=16
+            )
+
+        ligne_kpi = ft.Row([
+            carte_kpi("Dossiers analyses", f"{total_dossiers:,}".replace(",", " "), ft.icons.FOLDER_COPY_OUTLINED, ROUGE_CANADA),
+            carte_kpi("Taux d'acceptation moyen", f"{taux_moyen:.1f}%", ft.icons.TRENDING_UP, VERT_SUCCES),
+            carte_kpi("Accuracy du modele", f"{float(metriques['accuracy'])*100:.1f}%" if metriques.get('accuracy') else "-", ft.icons.INSIGHTS, BLEU_GLACIER),
+            carte_kpi("F1-Score du modele", f"{float(metriques['f1_score'])*100:.1f}%" if metriques.get('f1_score') else "-", ft.icons.ANALYTICS_OUTLINED, OR_ERABLE),
+        ], wrap=True, spacing=16)
+
+        date_execution = metriques.get('date_execution', '')
+        if date_execution:
+            try:
+                from datetime import datetime
+                if isinstance(date_execution, str):
+                    dt = datetime.fromisoformat(date_execution.replace('Z', '+00:00'))
+                else:
+                    dt = date_execution
+                date_formatee = dt.strftime("%d/%m/%Y %H:%M")
+            except:
+                date_formatee = str(date_execution)[:16]
+        else:
+            date_formatee = "inconnue"
+
+        return ft.ResponsiveRow([
+            ft.Column([ligne_kpi], col=12),
+            ft.Column([ft.Container(height=20)], col=12),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Evolution du taux d'acceptation par annee", size=15, weight=ft.FontWeight.BOLD),
+                    construire_courbe_taux(stats["taux_acceptation_par_annee"])
+                ]))
+            ], col=12),
+            ft.Column([ft.Container(height=20)], col=12),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Facteurs les plus influents du modele", size=15, weight=ft.FontWeight.BOLD),
+                    construire_graphique_importance(importance)
+                ]))
+            ], col={"sm": 12, "md": 6}),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Repartition par programme", size=15, weight=ft.FontWeight.BOLD),
+                    construire_camembert_programmes(repartition)
+                ]))
+            ], col={"sm": 12, "md": 6}),
+            ft.Column([ft.Container(height=20)], col=12),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Top 10 pays d'origine (historique)", size=15, weight=ft.FontWeight.BOLD),
+                    barres_horizontales(pays_data, "country_of_origin", "total", ROUGE_CANADA, "")
+                ]))
+            ], col={"sm": 12, "md": 6}),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Taux d'acceptation par secteur", size=15, weight=ft.FontWeight.BOLD),
+                    barres_horizontales(secteur_data, "sector", "taux", VERT_SUCCES)
+                ]))
+            ], col={"sm": 12, "md": 6}),
+            ft.Column([ft.Container(height=20)], col=12),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Taux d'acceptation par niveau d'etudes", size=15, weight=ft.FontWeight.BOLD),
+                    barres_horizontales(education_data, "education_level", "taux", BLEU_GLACIER)
+                ]))
+            ], col={"sm": 12, "md": 6}),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Text("Repartition globale des decisions", size=15, weight=ft.FontWeight.BOLD),
+                    ft.PieChart(
+                        sections=[
+                            ft.PieChartSection(
+                                value=d["total"],
+                                title=f"{d['visa_decision']}\n{d['total']}",
+                                title_style=ft.TextStyle(size=11, color="#FFFFFF", weight=ft.FontWeight.BOLD),
+                                color=VERT_SUCCES if d["visa_decision"] == "Accepted" else ROUGE_CANADA,
+                                radius=90
+                            )
+                            for d in decision_data
+                        ],
+                        sections_space=2,
+                        center_space_radius=40,
+                        height=260,
+                    )
+                ]))
+            ], col={"sm": 12, "md": 6}),
+            ft.Column([ft.Container(height=20)], col=12),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Row([
+                        ft.Text("Performance du modele par segment", size=15, weight=ft.FontWeight.BOLD),
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Row([
+                        ft.Column([construire_graphique_performance(perf_programme, 'program', "Par programme")], expand=True),
+                        ft.Column([construire_graphique_performance(perf_secteur, 'sector', "Par secteur")], expand=True),
+                    ], spacing=16),
+                    ft.Row([
+                        ft.Column([construire_graphique_performance(perf_education, 'education_level', "Par niveau d'études")], expand=True),
+                        ft.Column([construire_graphique_performance(perf_francophone, 'groupe_linguistique', "Par groupe linguistique")], expand=True),
+                    ], spacing=16),
+                    ft.Row([
+                        ft.Column([construire_graphique_performance(perf_pays, 'country_of_origin', "Top 10 pays")], expand=True),
+                    ], spacing=16),
+                ]))
+            ], col=12),
+            ft.Column([ft.Container(height=20)], col=12),
+            ft.Column([
+                carte(ft.Column([
+                    ft.Row([
+                        ft.Text("Metriques et performances actuelles du modele", size=15, weight=ft.FontWeight.BOLD),
+                        ft.Row([
+                            ft.IconButton(
+                                icon=ft.icons.REFRESH,
+                                icon_size=18,
+                                tooltip="Rafraîchir les métriques (forcer le cache)",
+                                on_click=lambda e: forcer_rafraichir_cache(client_api) or page.update()
+                            ),
+                            ft.IconButton(
+                                icon=ft.icons.REFRESH,
+                                icon_size=18,
+                                tooltip="Rafraîchir tout le dashboard",
+                                on_click=lambda e: forcer_rafraichir_cache_dashboard(client_api, page)
+                            ),
+                        ])
+                    ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
+                    ft.Text(texte_metriques(get_metriques_cache(client_api)), size=13, color=GRIS_MOYEN),
+                    ft.Row([
+                        ft.Text(
+                            f"Cache dashboard mis à jour : {CACHE_DASHBOARD['timestamp'] and datetime.fromtimestamp(CACHE_DASHBOARD['timestamp']).strftime('%d/%m/%Y %H:%M:%S') or 'jamais'}",
+                            size=11,
+                            color=GRIS_MOYEN,
+                            italic=True
+                        ),
+                        ft.Text(
+                            f" | Expire dans : {int(CACHE_DASHBOARD['ttl'] - (time.time() - CACHE_DASHBOARD['timestamp'])) if CACHE_DASHBOARD['timestamp'] else 0}s",
+                            size=11,
+                            color=GRIS_MOYEN,
+                            italic=True
+                        ),
+                    ]),
+                ]))
+            ], col=12),
+        ], columns=12)
+# frontend/main.py - Remplacer page_dashboard()
+
+    def page_dashboard():
         def construire():
+            # Conteneur avec indicateur de chargement
+            conteneur = ft.Column([
+                ft.ProgressRing(width=50, height=50, color=ROUGE_CANADA),
+                ft.Container(height=16),
+                ft.Text("Chargement du tableau de bord...", size=14, color=GRIS_MOYEN),
+            ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8)
             
-            # CHARGEMENT DES DONNEES
-            importance = client_api.feature_importance()
-            stats = client_api.statistiques_globales()
-            
-            # UTILISATION DU CACHE GLOBAL POUR LES MÉTRIQUES
-            metriques = get_metriques_cache(client_api)  # ← REMPLACÉ
-            
-            pays_data = client_api.repartition_pays()
-            secteur_data = client_api.taux_par_secteur()
-            education_data = client_api.taux_par_education()
-            decision_data = client_api.repartition_decision()
-
-            # NOUVEAU : chargement des données de performance par segment
-            perf_programme = client_api.performance_par_programme()
-            perf_secteur = client_api.performance_par_secteur()
-            perf_education = client_api.performance_par_education()
-            perf_francophone = client_api.performance_par_francophone()
-            perf_pays = client_api.performance_par_pays()
-
-            repartition = stats["repartition_par_programme"]
-            total_dossiers = sum(item["total"] for item in repartition)
-            taux_annees = [float(item["taux_acceptation"] or 0) for item in stats["taux_acceptation_par_annee"]]
-            taux_moyen = sum(taux_annees) / len(taux_annees) if taux_annees else 0
-
-            def carte_kpi(titre, valeur, icone, couleur):
-                return carte(
-                    ft.Column([
-                        ft.Row([ft.Icon(icone, color=couleur, size=22), ft.Text(titre, size=12, color=GRIS_MOYEN)], spacing=8),
-                        ft.Text(valeur, size=22, weight=ft.FontWeight.BOLD, color=GRIS_TEXTE),
-                    ], spacing=6),
-                    largeur=230,
-                    padding_val=16
-                )
-
-            ligne_kpi = ft.Row([
-                carte_kpi("Dossiers analyses", f"{total_dossiers:,}".replace(",", " "), ft.icons.FOLDER_COPY_OUTLINED, ROUGE_CANADA),
-                carte_kpi("Taux d'acceptation moyen", f"{taux_moyen:.1f}%", ft.icons.TRENDING_UP, VERT_SUCCES),
-                carte_kpi("Accuracy du modele", f"{float(metriques['accuracy'])*100:.1f}%" if metriques.get('accuracy') else "-", ft.icons.INSIGHTS, BLEU_GLACIER),
-                carte_kpi("F1-Score du modele", f"{float(metriques['f1_score'])*100:.1f}%" if metriques.get('f1_score') else "-", ft.icons.ANALYTICS_OUTLINED, OR_ERABLE),
-            ], wrap=True, spacing=16)
-
-            
-            # METRIQUES AVEC DATE DE DERNIERE MISE A JOUR
-            
-            date_execution = metriques.get('date_execution', '')
-            if date_execution:
+            def charger():
                 try:
-                    from datetime import datetime
-                    if isinstance(date_execution, str):
-                        dt = datetime.fromisoformat(date_execution.replace('Z', '+00:00'))
-                    else:
-                        dt = date_execution
-                    date_formatee = dt.strftime("%d/%m/%Y %H:%M")
-                except:
-                    date_formatee = str(date_execution)[:16]
-            else:
-                date_formatee = "inconnue"
-
-            return ft.ResponsiveRow([
-                ft.Column([ligne_kpi], col=12),
-                ft.Column([ft.Container(height=20)], col=12),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Evolution du taux d'acceptation par annee", size=15, weight=ft.FontWeight.BOLD),
-                        construire_courbe_taux(stats["taux_acceptation_par_annee"])
-                    ]))
-                ], col=12),
-                ft.Column([ft.Container(height=20)], col=12),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Facteurs les plus influents du modele", size=15, weight=ft.FontWeight.BOLD),
-                        construire_graphique_importance(importance)
-                    ]))
-                ], col={"sm": 12, "md": 6}),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Repartition par programme", size=15, weight=ft.FontWeight.BOLD),
-                        construire_camembert_programmes(repartition)
-                    ]))
-                ], col={"sm": 12, "md": 6}),
-                ft.Column([ft.Container(height=20)], col=12),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Top 10 pays d'origine (historique)", size=15, weight=ft.FontWeight.BOLD),
-                        barres_horizontales(pays_data, "country_of_origin", "total", ROUGE_CANADA, "")
-                    ]))
-                ], col={"sm": 12, "md": 6}),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Taux d'acceptation par secteur", size=15, weight=ft.FontWeight.BOLD),
-                        barres_horizontales(secteur_data, "sector", "taux", VERT_SUCCES)
-                    ]))
-                ], col={"sm": 12, "md": 6}),
-                ft.Column([ft.Container(height=20)], col=12),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Taux d'acceptation par niveau d'etudes", size=15, weight=ft.FontWeight.BOLD),
-                        barres_horizontales(education_data, "education_level", "taux", BLEU_GLACIER)
-                    ]))
-                ], col={"sm": 12, "md": 6}),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Text("Repartition globale des decisions", size=15, weight=ft.FontWeight.BOLD),
-                        ft.PieChart(
-                            sections=[
-                                ft.PieChartSection(
-                                    value=d["total"],
-                                    title=f"{d['visa_decision']}\n{d['total']}",
-                                    title_style=ft.TextStyle(size=11, color="#FFFFFF", weight=ft.FontWeight.BOLD),
-                                    color=VERT_SUCCES if d["visa_decision"] == "Accepted" else ROUGE_CANADA,
-                                    radius=90
-                                )
-                                for d in decision_data
-                            ],
-                            sections_space=2,
-                            center_space_radius=40,
-                            height=260,
-                        )
-                    ]))
-                ], col={"sm": 12, "md": 6}),
-                ft.Column([ft.Container(height=20)], col=12),
-                # NOUVEAU : Graphiques de performance par segment
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Row([
-                            ft.Text("Performance du modele par segment", size=15, weight=ft.FontWeight.BOLD),
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        ft.Row([
-                            ft.Column([
-                                construire_graphique_performance(perf_programme, 'program', "Par programme")
-                            ], expand=True),
-                            ft.Column([
-                                construire_graphique_performance(perf_secteur, 'sector', "Par secteur")
-                            ], expand=True),
-                        ], spacing=16),
-                        ft.Row([
-                            ft.Column([
-                                construire_graphique_performance(perf_education, 'education_level', "Par niveau d'études")
-                            ], expand=True),
-                            ft.Column([
-                                construire_graphique_performance(perf_francophone, 'groupe_linguistique', "Par groupe linguistique")
-                            ], expand=True),
-                        ], spacing=16),
-                        ft.Row([
-                            ft.Column([
-                                construire_graphique_performance(perf_pays, 'country_of_origin', "Top 10 pays")
-                            ], expand=True),
-                        ], spacing=16),
-                    ]))
-                ], col=12),
-                ft.Column([ft.Container(height=20)], col=12),
-                ft.Column([
-                    carte(ft.Column([
-                        ft.Row([
-                            ft.Text("Metriques et performances actuelles du modele", size=15, weight=ft.FontWeight.BOLD),
-                            ft.Row([
-                                ft.IconButton(
-                                    icon=ft.icons.REFRESH,
-                                    icon_size=18,
-                                    tooltip="Rafraîchir les métriques (forcer le cache)",
-                                    on_click=lambda e: forcer_rafraichir_cache(client_api) or page.update()
-                                ),
-                            ])
-                        ], alignment=ft.MainAxisAlignment.SPACE_BETWEEN),
-                        ft.Text(texte_metriques(get_metriques_cache(client_api)), size=13, color=GRIS_MOYEN),
-                        ft.Row([
-                            ft.Text(
-                                f"Cache mis à jour : {CACHE_METRIQUES['timestamp'] and datetime.fromtimestamp(CACHE_METRIQUES['timestamp']).strftime('%d/%m/%Y %H:%M:%S') or 'jamais'}",
-                                size=11,
-                                color=GRIS_MOYEN,
-                                italic=True
-                            ),
-                            ft.Text(
-                                f" | Expire dans : {int(CACHE_METRIQUES['ttl'] - (time.time() - CACHE_METRIQUES['timestamp'])) if CACHE_METRIQUES['timestamp'] else 0}s",
-                                size=11,
-                                color=GRIS_MOYEN,
-                                italic=True
-                            ),
-                        ]),
-                    ]))
-                ], col=12),
-            ], columns=12)
-
+                    # 1. Vérifier le cache
+                    cache_data = get_dashboard_cache(client_api)
+                    
+                    if cache_data:
+                        # Cache valide → utiliser les données
+                        print("✅ Dashboard chargé depuis le cache")
+                        conteneur.controls = [construire_dashboard_avec_donnees(cache_data)]
+                        page.update()
+                        return
+                    
+                    # 2. Cache expiré → charger toutes les données
+                    print("🔄 Chargement des données du dashboard...")
+                    
+                    # Charger toutes les données (comme avant)
+                    importance = client_api.feature_importance()
+                    stats = client_api.statistiques_globales()
+                    metriques = get_metriques_cache(client_api)
+                    pays_data = client_api.repartition_pays()
+                    secteur_data = client_api.taux_par_secteur()
+                    education_data = client_api.taux_par_education()
+                    decision_data = client_api.repartition_decision()
+                    perf_programme = client_api.performance_par_programme()
+                    perf_secteur = client_api.performance_par_secteur()
+                    perf_education = client_api.performance_par_education()
+                    perf_francophone = client_api.performance_par_francophone()
+                    perf_pays = client_api.performance_par_pays()
+                    
+                    # Assembler toutes les données
+                    toutes_donnees = {
+                        "importance": importance,
+                        "stats": stats,
+                        "metriques": metriques,
+                        "pays_data": pays_data,
+                        "secteur_data": secteur_data,
+                        "education_data": education_data,
+                        "decision_data": decision_data,
+                        "perf_programme": perf_programme,
+                        "perf_secteur": perf_secteur,
+                        "perf_education": perf_education,
+                        "perf_francophone": perf_francophone,
+                        "perf_pays": perf_pays,
+                    }
+                    
+                    # Mettre en cache
+                    set_dashboard_cache(toutes_donnees)
+                    
+                    # Afficher le dashboard
+                    conteneur.controls = [construire_dashboard_avec_donnees(toutes_donnees)]
+                    page.update()
+                    print("✅ Dashboard chargé et mis en cache")
+                    
+                except Exception as e:
+                    print(f"❌ Erreur chargement dashboard : {e}")
+                    conteneur.controls = [
+                        ft.Text(f"❌ Erreur de chargement : {e}", color=ROUGE_CANADA)
+                    ]
+                    page.update()
+            
+            import threading
+            threading.Thread(target=charger, daemon=True).start()
+            
+            return conteneur
+        
         return mise_en_page("/dashboard", "Tableau de bord analytique", construire)
-
     
 
     # formulaire par onglets, tout en menus deroulants - aucune saisie libre pour les criteres IRCC
@@ -2758,20 +2815,31 @@ def main_avec_diagnostic(page: ft.Page):
 
 
 
-# POUR RENDER - Lancement de l'application Flet
-
+# frontend/main.py - Remplacer la fin du fichier
 
 if __name__ == "__main__":
     import os
     import flet as ft
 
-    # Récupérer le port fourni par Render (ou 8000 par défaut pour le développement local)
-    port = int(os.environ.get("PORT", 8000))
-
-    # Lancer l'application Flet en mode web sur le port attribué
-    ft.app(
-        target=main_avec_diagnostic,
-        assets_dir="assets",
-        port=port,
-        view=ft.AppView.WEB_BROWSER
-    )
+    # Détecter si on est en local ou en production
+    # En production (Render), la variable PORT est définie
+    # En local, on utilise le port 8501
+    is_production = os.environ.get('PORT') is not None
+    
+    if is_production:
+        # Mode production (Render)
+        port = int(os.environ.get('PORT', 8501))
+        ft.app(
+            target=main_avec_diagnostic,
+            assets_dir="assets",
+            port=port,
+            view=ft.AppView.WEB_BROWSER
+        )
+    else:
+        # Mode local
+        ft.app(
+            target=main_avec_diagnostic,
+            assets_dir="assets",
+            port=8501,
+            view=ft.AppView.WEB_BROWSER
+        )

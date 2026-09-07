@@ -630,51 +630,66 @@ import logging
 from email.message import EmailMessage
 import base64
 
+# backend/utils.py - Remplacer envoyer_email_pdf()
+
 def envoyer_email_pdf(destinataire: str, sujet: str, corps: str, pdf_bytes: bytes, nom_fichier: str):
     logger = logging.getLogger('main_api')
     
-    api_key = os.environ.get('BREVO_API_KEY')
-    expediteur = os.environ.get('BREVO_SENDER_EMAIL')
+    # Vérifier si on est en local (présence des variables Gmail)
+    gmail_address = os.environ.get('GMAIL_ADDRESS')
+    gmail_password = os.environ.get('GMAIL_APP_PASSWORD')
     
-    if not api_key:
-        raise ValueError("BREVO_API_KEY non définie dans l'environnement")
-    if not expediteur:
-        raise ValueError("BREVO_SENDER_EMAIL non définie dans l'environnement")
+    if gmail_address and gmail_password:
+        # === MODE LOCAL : GMAIL ===
+        logger.info("Envoi via Gmail (mode local)")
+        try:
+            msg = EmailMessage()
+            msg['Subject'] = sujet
+            msg['From'] = gmail_address
+            msg['To'] = destinataire
+            msg.set_content(corps)
+            msg.add_attachment(pdf_bytes, maintype='application', subtype='pdf', filename=nom_fichier)
+            
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(gmail_address, gmail_password)
+                server.send_message(msg)
+            
+            logger.info(f"Email envoyé à {destinataire} via Gmail")
+            return {"status": "success"}
+        except Exception as e:
+            logger.error(f"Erreur Gmail : {e}")
+            raise
+    else:
+        # === MODE PRODUCTION : BREVO ===
+        logger.info("Envoi via Brevo (mode production)")
+        
+        api_key = os.environ.get('BREVO_API_KEY')
+        expediteur = os.environ.get('BREVO_SENDER_EMAIL')
+        
+        if not api_key:
+            raise ValueError("BREVO_API_KEY non définie")
+        if not expediteur:
+            raise ValueError("BREVO_SENDER_EMAIL non définie")
 
-    # Encoder le PDF en base64
-    pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        pdf_base64 = base64.b64encode(pdf_bytes).decode('utf-8')
+        data = {
+            "sender": {"email": expediteur, "name": "HI Consulting Immigration"},
+            "to": [{"email": destinataire}],
+            "subject": sujet,
+            "textContent": corps,
+            "attachment": [{"content": pdf_base64, "name": nom_fichier}]
+        }
 
-    # Construction du payload Brevo
-    data = {
-        "sender": {"email": expediteur, "name": "HI Consulting Immigration"},
-        "to": [{"email": destinataire}],
-        "subject": sujet,
-        "textContent": corps,
-        "attachment": [{
-            "content": pdf_base64,
-            "name": nom_fichier
-        }]
-    }
+        headers = {"api-key": api_key, "Content-Type": "application/json"}
 
-    headers = {
-        "api-key": api_key,
-        "Content-Type": "application/json"
-    }
-
-    try:
-        response = requests.post(
-            "https://api.brevo.com/v3/smtp/email",
-            json=data,
-            headers=headers,
-            timeout=30
-        )
-        response.raise_for_status()
-        logger.info(f"Email envoyé avec succès à {destinataire} via Brevo")
-        return response.json()
-    except Exception as e:
-        logger.error(f"Erreur lors de l'envoi via Brevo : {e}")
-        raise
-
+        try:
+            response = requests.post("https://api.brevo.com/v3/smtp/email", json=data, headers=headers, timeout=30)
+            response.raise_for_status()
+            logger.info(f"Email envoyé à {destinataire} via Brevo")
+            return response.json()
+        except Exception as e:
+            logger.error(f"Erreur Brevo : {e}")
+            raise
 
 
 # A ajouter dans utils.py - detection de completude du profil

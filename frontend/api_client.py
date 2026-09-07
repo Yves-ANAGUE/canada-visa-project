@@ -33,7 +33,7 @@ class ClientAPI:
         return reponse.json()
 
     def connexion(self, email: str, mot_de_passe: str) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             reponse = client.get(f"{API_BASE_URL}/moi", auth=(email, mot_de_passe))
             if reponse.status_code == 401:
                 raise ErreurAPI("Identifiants invalides ou compte suspendu", 401)
@@ -49,52 +49,52 @@ class ClientAPI:
         return {"statut": "connecte"}
 
     def predire(self, profil: dict) -> dict:
-        with httpx.Client(timeout=20) as client:
+        with httpx.Client(timeout=80) as client:
             r = client.post(f"{API_BASE_URL}/predire", json=profil, auth=self._auth())
             return self._traiter_reponse(r)
 
     def diagnostic(self, profil: dict) -> dict:
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=120) as client:
             r = client.post(f"{API_BASE_URL}/diagnostic", json=profil, auth=self._auth())
             return self._traiter_reponse(r)
 
     def simulateur(self, profil: dict) -> dict:
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=120) as client:
             r = client.post(f"{API_BASE_URL}/simulateur-optimisation", json=profil, auth=self._auth())
             return self._traiter_reponse(r)
 
     def creer_dossier(self, dossier: dict) -> dict:
-        with httpx.Client(timeout=20) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/nouveau", json=dossier, auth=self._auth())
             return self._traiter_reponse(r)
 
     def obtenir_dossier(self, id_client: str) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/dossiers/{id_client}", auth=self._auth())
             return self._traiter_reponse(r)
 
     def modifier_dossier(self, id_client: str, dossier: dict) -> dict:
-        with httpx.Client(timeout=20) as client:
+        with httpx.Client(timeout=80) as client:
             r = client.put(f"{API_BASE_URL}/dossiers/{id_client}", json=dossier, auth=self._auth())
             return self._traiter_reponse(r)
 
     def supprimer_dossier(self, id_client: str) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.delete(f"{API_BASE_URL}/dossiers/{id_client}", auth=self._auth())
             return self._traiter_reponse(r)
 
     def rechercher_dossiers(self, terme: str) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/dossiers/recherche", params={"terme": terme}, auth=self._auth())
             return self._traiter_reponse(r)
 
     def feature_importance(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/feature-importance", auth=self._auth())
             return self._traiter_reponse(r)
 
     def statistiques_globales(self) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/statistiques-globales", auth=self._auth())
             return self._traiter_reponse(r)
 
@@ -102,32 +102,32 @@ class ClientAPI:
         return f"{API_BASE_URL}/dossiers/{id_client}/pdf"
 
     def envoyer_email(self, id_client: str) -> dict:
-        with httpx.Client(timeout=240) as client:  # 240 secondes
+        with httpx.Client(timeout=300) as client:  # 300 secondes
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/envoyer-email", auth=self._auth())
             return self._traiter_reponse(r)
 
     def declencher_reentrainement(self) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.post(f"{API_BASE_URL}/admin/reentrainer", auth=self._auth())
             return self._traiter_reponse(r)
 
     def historique_entrainement(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/admin/historique-entrainement", auth=self._auth())
             return self._traiter_reponse(r)
 
     def lister_agents(self, terme: str = "") -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/admin/agents", params={"terme": terme}, auth=self._auth())
             return self._traiter_reponse(r)
 
     def creer_agent(self, donnees: dict) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.post(f"{API_BASE_URL}/admin/agents", json=donnees, auth=self._auth())
             return self._traiter_reponse(r)
 
     def modifier_statut_agent(self, identifiant_conseiller: str, statut: str) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.put(
                 f"{API_BASE_URL}/admin/agents/{identifiant_conseiller}/statut",
                 params={"statut": statut}, auth=self._auth()
@@ -135,32 +135,32 @@ class ClientAPI:
             return self._traiter_reponse(r)
 
     def supprimer_agent(self, identifiant_conseiller: str) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.delete(f"{API_BASE_URL}/admin/agents/{identifiant_conseiller}", auth=self._auth())
             return self._traiter_reponse(r)
 
     def performance_par_programme(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/performance-par-programme", auth=self._auth())
             return self._traiter_reponse(r)
 
     def performance_par_secteur(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/performance-par-secteur", auth=self._auth())
             return self._traiter_reponse(r)
 
     def performance_par_education(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/performance-par-education", auth=self._auth())
             return self._traiter_reponse(r)
 
     def performance_par_francophone(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/performance-par-francophone", auth=self._auth())
             return self._traiter_reponse(r)
 
     def performance_par_pays(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/performance-par-pays", auth=self._auth())
             return self._traiter_reponse(r)
     
@@ -172,51 +172,51 @@ class ClientAPI:
             return self._traiter_reponse(r)
 
     def reouvrir_dossier(self, id_client: str) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/reouvrir", auth=self._auth())
             return self._traiter_reponse(r)
 
     def modifier_agent(self, identifiant_conseiller: str, donnees: dict) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.put(f"{API_BASE_URL}/admin/agents/{identifiant_conseiller}",
                             json=donnees, auth=self._auth())
             return self._traiter_reponse(r)
 
     def metriques_modele(self) -> dict:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/metriques-modele", auth=self._auth())
             return self._traiter_reponse(r)
 
     def repartition_pays(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/repartition-pays", auth=self._auth())
             return self._traiter_reponse(r)
 
     def taux_par_secteur(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/taux-par-secteur", auth=self._auth())
             return self._traiter_reponse(r)
 
     def taux_par_education(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/taux-par-education", auth=self._auth())
             return self._traiter_reponse(r)
 
     def repartition_decision(self) -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/analytics/repartition-decision", auth=self._auth())
             return self._traiter_reponse(r)
 
     
     def regenerer_diagnostic(self, id_client: str) -> dict:
         """Régénère le diagnostic IA et le stocke en base, retourne le résultat complet."""
-        with httpx.Client(timeout=120) as client:
+        with httpx.Client(timeout=240) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/regenerer-diagnostic", auth=self._auth())
             return self._traiter_reponse(r)
 
     def simuler_dossier(self, id_client: str) -> dict:
         """Simule l'optimisation et génère le diagnostic SANS le stocker en base (plus rapide)."""
-        with httpx.Client(timeout=120) as client:
+        with httpx.Client(timeout=240) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/simuler", auth=self._auth())
             return self._traiter_reponse(r)
 
@@ -226,7 +226,7 @@ class ClientAPI:
         Simulation RAPIDE : retourne les résultats immédiatement,
         le diagnostic IA est généré en arrière-plan.
         """
-        with httpx.Client(timeout=30) as client:
+        with httpx.Client(timeout=120) as client:
             r = client.post(f"{API_BASE_URL}/dossiers/{id_client}/simuler-async", auth=self._auth())
             return self._traiter_reponse(r)
 
@@ -234,14 +234,14 @@ class ClientAPI:
         """
         Vérifie si le diagnostic IA est disponible pour un dossier.
         """
-        with httpx.Client(timeout=10) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/dossiers/{id_client}/diagnostic-status", auth=self._auth())
             return self._traiter_reponse(r)
 
     # CORRECTION - lister_dossiers accepte "decision"
     
     def lister_dossiers(self, terme="", programme="", pays="", phase="", decision="") -> list:
-        with httpx.Client(timeout=15) as client:
+        with httpx.Client(timeout=60) as client:
             r = client.get(f"{API_BASE_URL}/dossiers/liste",
                             params={
                                 "terme": terme,
