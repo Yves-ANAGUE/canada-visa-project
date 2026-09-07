@@ -123,6 +123,77 @@ def forcer_rafraichir_cache_dashboard(client_api, page):
     notification(page, "Rafraîchissement du tableau de bord...", succes=True)
     page.go("/dashboard")
 
+# Variable pour éviter les chargements multiples en arrière-plan
+CHARGEMENT_DASHBOARD_EN_COURS = False
+
+def charger_dashboard_en_arriere_plan(client_api, page):
+    """
+    Charge le dashboard en arrière-plan de manière persistante.
+    Une fois le chargement terminé, le cache est mis à jour.
+    """
+    global CHARGEMENT_DASHBOARD_EN_COURS
+    
+    # Éviter les chargements simultanés
+    if CHARGEMENT_DASHBOARD_EN_COURS:
+        print("Chargement déjà en cours, ignore...")
+        return
+    
+    print("Démarrage du chargement en arrière-plan...")
+    CHARGEMENT_DASHBOARD_EN_COURS = True
+    
+    import threading
+    def charger():
+        global CHARGEMENT_DASHBOARD_EN_COURS
+        try:
+            print("Chargement des données du dashboard...")
+            
+            # Charger toutes les données
+            importance = client_api.feature_importance()
+            stats = client_api.statistiques_globales()
+            metriques = get_metriques_cache(client_api)
+            pays_data = client_api.repartition_pays()
+            secteur_data = client_api.taux_par_secteur()
+            education_data = client_api.taux_par_education()
+            decision_data = client_api.repartition_decision()
+            perf_programme = client_api.performance_par_programme()
+            perf_secteur = client_api.performance_par_secteur()
+            perf_education = client_api.performance_par_education()
+            perf_francophone = client_api.performance_par_francophone()
+            perf_pays = client_api.performance_par_pays()
+            
+            toutes_donnees = {
+                "importance": importance,
+                "stats": stats,
+                "metriques": metriques,
+                "pays_data": pays_data,
+                "secteur_data": secteur_data,
+                "education_data": education_data,
+                "decision_data": decision_data,
+                "perf_programme": perf_programme,
+                "perf_secteur": perf_secteur,
+                "perf_education": perf_education,
+                "perf_francophone": perf_francophone,
+                "perf_pays": perf_pays,
+            }
+            
+            # Mettre en cache (utilise l'ancien CACHE_DASHBOARD)
+            set_dashboard_cache(toutes_donnees)
+            print("Dashboard chargé et mis en cache")
+            
+            # Si la page dashboard est active, rafraîchir
+            if page.route == "/dashboard":
+                try:
+                    page.go("/dashboard")  # Force le rechargement
+                except:
+                    pass
+                    
+        except Exception as e:
+            print(f"Erreur chargement dashboard : {e}")
+        finally:
+            CHARGEMENT_DASHBOARD_EN_COURS = False
+    
+    threading.Thread(target=charger, daemon=True).start()
+
 # CORRECTION dans main.py - remplace toute la logique de navigation
 
 def main(page: ft.Page):
@@ -722,81 +793,35 @@ def main(page: ft.Page):
                 ]))
             ], col=12),
         ], columns=12)
-# frontend/main.py - Remplacer page_dashboard()
+
 
     def page_dashboard():
         def construire():
-            # Conteneur avec indicateur de chargement
-            conteneur = ft.Column([
+            global CHARGEMENT_DASHBOARD_EN_COURS
+            
+            # 1. Vérifier le cache
+            cache_data = get_dashboard_cache(client_api)
+            
+            if cache_data:
+                # Cache valide → afficher immédiatement
+                print("Dashboard chargé depuis le cache")
+                return construire_dashboard_avec_donnees(cache_data)
+            
+            # 2. Cache vide → afficher indicateur + lancer chargement
+            print("Cache vide, affichage de l'indicateur...")
+            
+            # Si le chargement n'est pas déjà en cours, le lancer
+            if not CHARGEMENT_DASHBOARD_EN_COURS:
+                charger_dashboard_en_arriere_plan(client_api, page)
+            
+            # Afficher l'indicateur de chargement
+            return ft.Column([
                 ft.ProgressRing(width=50, height=50, color=ROUGE_CANADA),
                 ft.Container(height=16),
                 ft.Text("Chargement du tableau de bord...", size=14, color=GRIS_MOYEN),
+                ft.Text("Les données sont chargées en arrière-plan", size=12, color=GRIS_MOYEN, italic=True),
+                ft.Text("Revenez dans quelques secondes", size=11, color=GRIS_MOYEN, italic=True),
             ], horizontal_alignment=ft.CrossAxisAlignment.CENTER, spacing=8)
-            
-            def charger():
-                try:
-                    # 1. Vérifier le cache
-                    cache_data = get_dashboard_cache(client_api)
-                    
-                    if cache_data:
-                        # Cache valide → utiliser les données
-                        print("✅ Dashboard chargé depuis le cache")
-                        conteneur.controls = [construire_dashboard_avec_donnees(cache_data)]
-                        page.update()
-                        return
-                    
-                    # 2. Cache expiré → charger toutes les données
-                    print("🔄 Chargement des données du dashboard...")
-                    
-                    # Charger toutes les données (comme avant)
-                    importance = client_api.feature_importance()
-                    stats = client_api.statistiques_globales()
-                    metriques = get_metriques_cache(client_api)
-                    pays_data = client_api.repartition_pays()
-                    secteur_data = client_api.taux_par_secteur()
-                    education_data = client_api.taux_par_education()
-                    decision_data = client_api.repartition_decision()
-                    perf_programme = client_api.performance_par_programme()
-                    perf_secteur = client_api.performance_par_secteur()
-                    perf_education = client_api.performance_par_education()
-                    perf_francophone = client_api.performance_par_francophone()
-                    perf_pays = client_api.performance_par_pays()
-                    
-                    # Assembler toutes les données
-                    toutes_donnees = {
-                        "importance": importance,
-                        "stats": stats,
-                        "metriques": metriques,
-                        "pays_data": pays_data,
-                        "secteur_data": secteur_data,
-                        "education_data": education_data,
-                        "decision_data": decision_data,
-                        "perf_programme": perf_programme,
-                        "perf_secteur": perf_secteur,
-                        "perf_education": perf_education,
-                        "perf_francophone": perf_francophone,
-                        "perf_pays": perf_pays,
-                    }
-                    
-                    # Mettre en cache
-                    set_dashboard_cache(toutes_donnees)
-                    
-                    # Afficher le dashboard
-                    conteneur.controls = [construire_dashboard_avec_donnees(toutes_donnees)]
-                    page.update()
-                    print("✅ Dashboard chargé et mis en cache")
-                    
-                except Exception as e:
-                    print(f"❌ Erreur chargement dashboard : {e}")
-                    conteneur.controls = [
-                        ft.Text(f"❌ Erreur de chargement : {e}", color=ROUGE_CANADA)
-                    ]
-                    page.update()
-            
-            import threading
-            threading.Thread(target=charger, daemon=True).start()
-            
-            return conteneur
         
         return mise_en_page("/dashboard", "Tableau de bord analytique", construire)
     
